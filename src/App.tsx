@@ -4,7 +4,6 @@ import MapTracker from './components/MapTracker';
 import Login from './components/Login';
 import SessionAccess from './components/SessionAccess';
 import NotFound from './components/NotFound';
-import RequireAuth from './components/RequireAuth';
 import { AuthProvider } from './auth/AuthContext';
 
 const App: React.FC = () => {
@@ -15,12 +14,8 @@ const App: React.FC = () => {
         <Route path="/login" element={<Login />} />
         <Route path="/access/:sessionId" element={<SessionAccess />} />
         
-        {/* Protected routes */}
-        <Route path="/map/:sessionId" element={
-          <RequireAuth>
-            <MapTracker />
-          </RequireAuth>
-        } />
+        {/* Make map accessible without authentication */}
+        <Route path="/map/:sessionId" element={<MapTracker />} />
         
         {/* Direct session access with token */}
         <Route path="/session/:sessionId" element={<SessionAccess />} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../auth/AuthContext';
 import './SessionAccess.css';
@@ -23,7 +23,7 @@ const SessionAccess: React.FC = () => {
           return;
         }
 
-        // Check if session exists and token is valid
+        // Check if session exists
         const sessionRef = doc(db, 'sos_sessions', sessionId);
         const sessionDoc = await getDoc(sessionRef);
 
@@ -34,22 +34,41 @@ const SessionAccess: React.FC = () => {
         }
 
         const sessionData = sessionDoc.data();
+        let isValidAccess = false;
         
         // Verify the access token if provided
         if (accessToken) {
-          // In a real app, you'd verify the token with a proper mechanism
-          // This is a simplified example
-          if (accessToken !== sessionData.accessToken) {
-            setError('Invalid access token');
-            setIsValidating(false);
-            return;
+          // Compare with the token stored in the session
+          if (accessToken === sessionData.accessToken) {
+            isValidAccess = true;
           }
         }
 
-        // Create a temporary user for this session
-        await createTempUser(sessionId);
+        if (!isValidAccess && sessionData.accessToken) {
+          setError('This emergency session requires a valid access token');
+          setIsValidating(false);
+          return;
+        }
 
-        // Redirect to the map view for this session
+        // Record this access in the session document
+        try {
+          await updateDoc(sessionRef, {
+            accessLogs: arrayUnion({
+              timestamp: serverTimestamp(),
+              type: 'web_access',
+              hasToken: !!accessToken
+            })
+          });
+        } catch (logError) {
+          // Non-critical error, just log it
+          console.warn('Could not log access:', logError);
+        }
+
+        // Store the session ID in localStorage for simpler access management
+        localStorage.setItem('sos_session_id', sessionId);
+        localStorage.setItem('emergency_public_access', 'true');
+
+        // Redirect directly to the map view without authentication
         navigate(`/map/${sessionId}`);
       } catch (error) {
         console.error('Error validating session:', error);
@@ -59,7 +78,7 @@ const SessionAccess: React.FC = () => {
     };
 
     validateSession();
-  }, [sessionId, accessToken, createTempUser, navigate]);
+  }, [sessionId, accessToken, navigate]);
 
   if (isValidating) {
     return (

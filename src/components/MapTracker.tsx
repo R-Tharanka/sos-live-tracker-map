@@ -49,13 +49,13 @@ const MapTracker: React.FC = () => {
 
     // Check if we have emergency public access
     const hasEmergencyAccess = localStorage.getItem('emergency_public_access') === 'true' || 
-                              localStorage.getItem('sos_session_id') === sessionId;
+                               localStorage.getItem('sos_session_id') === sessionId;
     
-    // If no user and no emergency access, redirect to login
-    if (!user && !hasEmergencyAccess) {
-      navigate('/login', { state: { from: `/map/${sessionId}` } });
-      return;
-    }
+    // Record if this is an authenticated session or public emergency access
+    const accessMode = user ? 'authenticated' : 'emergency_access';
+    console.log(`Accessing session in ${accessMode} mode`);
+    
+    // For all SOS emergency access, we'll allow viewing without login
 
     // Load Google Maps
     const loader = new Loader({
