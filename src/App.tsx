@@ -1,14 +1,35 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import MapTracker from './components/MapTracker';
+import Login from './components/Login';
+import SessionAccess from './components/SessionAccess';
 import NotFound from './components/NotFound';
+import RequireAuth from './components/RequireAuth';
+import { AuthProvider } from './auth/AuthContext';
 
 const App: React.FC = () => {
   return (
-    <Routes>
-      <Route path="/session/:sessionId" element={<MapTracker />} />
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <AuthProvider>
+      <Routes>
+        {/* Public routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/access/:sessionId" element={<SessionAccess />} />
+        
+        {/* Protected routes */}
+        <Route path="/map/:sessionId" element={
+          <RequireAuth>
+            <MapTracker />
+          </RequireAuth>
+        } />
+        
+        {/* Direct session access with token */}
+        <Route path="/session/:sessionId" element={<SessionAccess />} />
+        
+        {/* Fallback route */}
+        <Route path="/" element={<Login />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AuthProvider>
   );
 };
 

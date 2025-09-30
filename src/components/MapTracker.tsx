@@ -1,13 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, onSnapshot, Timestamp } from 'firebase/firestore';
+import { useParams, useNavigate } from 'react-router-dom';
+import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { Loader } from '@googlemaps/js-api-loader';
-import { firebaseConfig } from '../firebaseConfig';
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import { db } from '../firebase';
+import { useAuth } from '../auth/AuthContext';
 
 // Google Maps API key from environment variables
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -41,6 +37,8 @@ const MapTracker: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!sessionId) {
