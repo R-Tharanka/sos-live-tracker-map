@@ -97,12 +97,40 @@ This web application serves as the companion to the ClimateReady mobile app's SO
 
 3. Follow the prompts to link your project and configure deployment settings.
 
-4. Set environment variables in the Vercel project dashboard:
+4. A `vercel.json` configuration file is already included in the project to handle SPA routing.
+   This ensures routes like `/login` and `/session/:id` work correctly.
+
+5. Set environment variables in the Vercel project dashboard:
    - Add all the variables from your `.env` file
    - Update `VITE_APP_URL` to your deployed URL
 
 5. Update the main ClimateReady app's environment variables:
    - Set `SOS_WEB_APP_URL` to your deployed URL
+
+### Deployment Troubleshooting
+
+If you encounter 404 errors when navigating directly to routes like `/login` or `/session/:id`:
+
+1. Ensure the `vercel.json` file is in the root directory with the following content:
+   ```json
+   {
+     "rewrites": [
+       { "source": "/(.*)", "destination": "/index.html" }
+     ]
+   }
+   ```
+
+2. Check that all image references in your components use imports rather than direct paths
+   ```tsx
+   // Do this:
+   import logoImg from '/logo.png';
+   <img src={logoImg} alt="Logo" />
+   
+   // Instead of this:
+   <img src="/logo.png" alt="Logo" />
+   ```
+
+3. Make sure your environment variables are correctly set in the Vercel dashboard
 
 ### Alternative Deployment Options
 
@@ -129,6 +157,7 @@ This web application works in tandem with the ClimateReady mobile app. When a us
   - `SessionAccess.tsx` - Handles session token verification
 - `/src/auth/` - Authentication logic
 - `/src/types/` - TypeScript type definitions
+- `vercel.json` - Configuration for Vercel deployment with SPA routing support
 
 ## Related Repositories
 

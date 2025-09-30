@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Login.css';
+import logoImg from '/logo.png';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -56,7 +57,7 @@ const Login: React.FC = () => {
       <div className="login-card">
         <div className="login-header">
           <img 
-            src="./logo.png" 
+            src={logoImg} 
             alt="ClimateReady Logo" 
             className="login-logo" 
           />
