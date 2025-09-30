@@ -147,3 +147,15 @@
   color: #777;
   margin-top: 16px;
 }
+
+.login-status-message {
+  text-align: center;
+  margin-top: 12px;
+  min-height: 20px;
+}
+
+.login-status-message p {
+  margin: 0;
+  font-size: 14px;
+  color: #0284c7;
+}

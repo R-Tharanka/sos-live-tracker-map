@@ -56,7 +56,7 @@ const Login: React.FC = () => {
       <div className="login-card">
         <div className="login-header">
           <img 
-            src="/logo.png" 
+            src="./logo.png" 
             alt="ClimateReady Logo" 
             className="login-logo" 
           />
@@ -114,6 +114,9 @@ const Login: React.FC = () => {
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </button>
+          <div className="login-status-message">
+            {isLoading && <p>Authenticating your credentials...</p>}
+          </div>
         </form>
         
         <div className="login-footer">
