@@ -62,6 +62,9 @@ const Login: React.FC = () => {
           />
           <h2>SOS Tracker Login</h2>
           <p>Sign in to view and track emergency SOS locations</p>
+          <div className="emergency-access-notice">
+            <p><strong>Emergency Contact?</strong> If you received a link via SMS or email, click it directly to view the emergency location without logging in.</p>
+          </div>
         </div>
         
         {loginError && (
