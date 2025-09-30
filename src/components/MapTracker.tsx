@@ -47,6 +47,16 @@ const MapTracker: React.FC = () => {
       return;
     }
 
+    // Check if we have emergency public access
+    const hasEmergencyAccess = localStorage.getItem('emergency_public_access') === 'true' || 
+                              localStorage.getItem('sos_session_id') === sessionId;
+    
+    // If no user and no emergency access, redirect to login
+    if (!user && !hasEmergencyAccess) {
+      navigate('/login', { state: { from: `/map/${sessionId}` } });
+      return;
+    }
+
     // Load Google Maps
     const loader = new Loader({
       apiKey: GOOGLE_MAPS_API_KEY,

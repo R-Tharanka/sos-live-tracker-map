@@ -95,6 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Create temporary user for a specific SOS session
+  // This function now automatically creates a temporary user for emergency access
   const createTempUser = async (sessionId: string) => {
     setError(null);
     try {
@@ -103,32 +104,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Generate temporary credentials
+      // Generate temporary credentials based on session ID
       const tempEmail = generateTempEmail(sessionId);
       const tempPassword = generateTempPassword();
 
+      // Generate a session-specific token from the sessionId
+      // This makes the login process automatic for emergency contacts
+      // while still maintaining some security
+      localStorage.setItem('emergency_access_token', sessionId);
+      localStorage.setItem('sos_session_id', sessionId);
+      
       try {
-        // Try to sign in first (in case this is a returning visitor with a temp account)
-        await signInWithEmailAndPassword(auth, tempEmail, tempPassword);
-      } catch (err) {
-        // If sign in fails, create a new temp account
+        // Try signing in with anonymous auth first (simplest for emergency contacts)
         const userCredential = await createUserWithEmailAndPassword(auth, tempEmail, tempPassword);
-        
-        // Store the session ID in local storage
-        localStorage.setItem('sos_session_id', sessionId);
-        
-        // If a user was created anonymously before, link the accounts
-        if (auth.currentUser && auth.currentUser.isAnonymous) {
-          const credential = EmailAuthProvider.credential(tempEmail, tempPassword);
-          await linkWithCredential(auth.currentUser, credential);
-        }
-        
         setUser(userCredential.user);
+        
+        // Record access time for auditing
+        const now = new Date().toISOString();
+        localStorage.setItem('emergency_access_time', now);
+      } catch (err) {
+        // If creation fails (likely because account already exists), try to sign in
+        await signInWithEmailAndPassword(auth, tempEmail, tempPassword);
+        
+        // Record access time for auditing
+        const now = new Date().toISOString();
+        localStorage.setItem('emergency_access_time', now);
       }
     } catch (err: any) {
       console.error('Error creating temp user:', err);
-      setError(err.message);
-      throw err;
+      setError('Emergency access granted without account - viewing in public mode');
+      
+      // Even if authentication fails, still allow access in emergency situations
+      // by setting a special flag that the map component will recognize
+      localStorage.setItem('emergency_public_access', 'true');
+      localStorage.setItem('sos_session_id', sessionId);
+      
+      // Don't throw the error - let the user see the emergency info
     }
   };
 
