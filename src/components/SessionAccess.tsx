@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useAuth } from '../auth/AuthContext';
 import './SessionAccess.css';
 
@@ -74,17 +72,52 @@ const SessionAccess: React.FC = () => {
           return;
         }
 
-        // Record this access in the session document
-        // We're still using the Firebase SDK for writing, which is less problematic
+        // Record this access in the session document using REST API
+        // We need to use REST API instead of SDK for unauthenticated users
         try {
-          const sessionRef = doc(db, 'sos_sessions', sessionId);
-          await updateDoc(sessionRef, {
-            accessLogs: arrayUnion({
-              timestamp: serverTimestamp(),
-              type: 'web_access',
-              hasToken: true
+          console.log('[SessionAccess] Recording access log via REST API');
+          
+          // Construct the REST API URL for patching the document
+          const updateUrl = new URL(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}`);
+          updateUrl.searchParams.set('key', import.meta.env.VITE_FIREBASE_API_KEY);
+          updateUrl.searchParams.set('token', accessToken);
+          updateUrl.searchParams.set('updateMask.fieldPaths', 'accessLogs');
+          
+          // Current timestamp in RFC3339 format for REST API
+          const timestamp = new Date().toISOString();
+          
+          // Send the PATCH request
+          const updateResponse = await fetch(updateUrl.toString(), {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fields: {
+                accessLogs: {
+                  arrayValue: {
+                    values: [
+                      {
+                        mapValue: {
+                          fields: {
+                            timestamp: { timestampValue: timestamp },
+                            type: { stringValue: 'web_access' },
+                            hasToken: { booleanValue: true }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
             })
           });
+          
+          if (!updateResponse.ok) {
+            console.warn('[SessionAccess] Failed to log access:', updateResponse.status, updateResponse.statusText);
+          } else {
+            console.log('[SessionAccess] Access log recorded successfully');
+          }
         } catch (logError) {
           // Non-critical error, just log it
           console.warn('[SessionAccess] Could not log access:', logError);
