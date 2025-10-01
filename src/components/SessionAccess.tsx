@@ -38,8 +38,14 @@ const SessionAccess: React.FC = () => {
         // Using direct REST API to validate the session with token
         // This avoids issues with the Firebase SDK streaming listeners
         const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-        const restApiUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}?key=${import.meta.env.VITE_FIREBASE_API_KEY}&token=${accessToken}`;
-
+        
+        // Create URL object to properly handle query parameters
+        const restApiUrl = new URL(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}`);
+        
+        // Add query parameters
+        restApiUrl.searchParams.set('key', import.meta.env.VITE_FIREBASE_API_KEY);
+        restApiUrl.searchParams.set('token', accessToken);
+        
         console.log('[SessionAccess] Validating session via REST API');
         const response = await fetch(restApiUrl);
 
@@ -93,7 +99,7 @@ const SessionAccess: React.FC = () => {
         console.log('[SessionAccess] Token stored in localStorage:', accessToken.substring(0, 5) + '...');
 
         // Redirect directly to the map view without authentication
-        // Always include the token in the URL for the MapTracker component to use
+        // Include the token in the URL for the MapTracker component to use
         navigate(`/map/${sessionId}?token=${accessToken}`);
       } catch (error) {
         console.error('Error validating session:', error);

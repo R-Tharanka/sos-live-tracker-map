@@ -21,9 +21,21 @@ const TokenDebugHelper: React.FC = () => {
     
     // Check if the token is properly encoded in the URL
     let tokenInUrl = false;
+    let tokenOccurrences = 0;
+    let hasDuplicateTokens = false;
     try {
       const currentUrl = window.location.href;
       tokenInUrl = currentUrl.includes('token=');
+      
+      // Count how many times 'token=' appears in the URL
+      const matches = currentUrl.match(/token=/g);
+      tokenOccurrences = matches ? matches.length : 0;
+      hasDuplicateTokens = tokenOccurrences > 1;
+      
+      // Log warning if duplicate tokens detected
+      if (hasDuplicateTokens) {
+        console.warn('TokenDebugHelper - DUPLICATE TOKENS DETECTED IN URL:', tokenOccurrences);
+      }
     } catch (e) {
       console.error('Error checking URL for token:', e);
     }
@@ -37,8 +49,10 @@ const TokenDebugHelper: React.FC = () => {
       tokenMatch: accessToken === storedToken,
       sessionMatch: sessionId === storedSessionId,
       tokenInUrl,
+      tokenOccurrences,
+      hasDuplicateTokens,
       userAgent: isMobile ? 'Mobile' : 'Desktop',
-      currentUrl: window.location.href.substring(0, 30) + '...'
+      currentUrl: window.location.href
     });
     
     // Log for easier debugging
@@ -62,13 +76,42 @@ const TokenDebugHelper: React.FC = () => {
     }}>
       <h4 style={{ margin: '0 0 5px', fontSize: '12px' }}>Token Debug Info</h4>
       <div style={{ fontFamily: 'monospace' }}>
+        {debugInfo.hasDuplicateTokens && (
+          <div style={{ 
+            backgroundColor: '#ff5252', 
+            color: 'white', 
+            padding: '5px', 
+            marginBottom: '5px',
+            borderRadius: '3px',
+            fontWeight: 'bold'
+          }}>
+            ⚠️ DUPLICATE TOKENS DETECTED! ({debugInfo.tokenOccurrences})
+          </div>
+        )}
+        
         <div>Session ID: {debugInfo.sessionId}</div>
         <div>URL Token: {debugInfo.urlToken ? `${debugInfo.urlToken?.substring(0, 5)}...` : '❌ Missing!'}</div>
         <div>Stored Token: {debugInfo.storedToken ? `${debugInfo.storedToken?.substring(0, 5)}...` : '❌ Missing!'}</div>
         <div>Token Match: {debugInfo.tokenMatch ? '✅' : '❌'}</div>
         <div>Session Match: {debugInfo.sessionMatch ? '✅' : '❌'}</div>
         <div>Token in URL: {debugInfo.tokenInUrl ? '✅' : '❌'}</div>
+        <div>Token Count: {debugInfo.tokenOccurrences}</div>
         <div>Device: {debugInfo.userAgent}</div>
+        
+        <details>
+          <summary style={{ marginTop: '5px', cursor: 'pointer' }}>URL Details</summary>
+          <div style={{
+            fontSize: '9px',
+            wordBreak: 'break-all',
+            maxHeight: '60px',
+            overflowY: 'auto',
+            backgroundColor: '#333',
+            padding: '3px',
+            marginTop: '3px'
+          }}>
+            {debugInfo.currentUrl}
+          </div>
+        </details>
         <button 
           onClick={() => {
             // Force token refresh

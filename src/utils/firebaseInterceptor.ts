@@ -46,10 +46,21 @@ function setupFirebaseTokenInterceptor() {
           
           // Only add token to document requests for sos_sessions collection
           if (url.includes('sos_sessions')) {
-            console.log(`[TokenInterceptor] Adding token to sos_sessions request: ${url.substring(0, 40)}...`);
+            console.log(`[TokenInterceptor] Processing sos_sessions request: ${url.substring(0, 40)}...`);
             
+            // Check if the URL already contains a token parameter
+            const urlObj = new URL(url);
+            const hasToken = urlObj.searchParams.has('token');
+            
+            if (hasToken) {
+              console.log('[TokenInterceptor] URL already contains token parameter, skipping modification');
+              // Return the original input without modification
+              return originalFetch(input, init);
+            }
+            
+            console.log('[TokenInterceptor] Adding token to request');
             if (typeof input === 'string') {
-              // For string URLs, simply add the token parameter
+              // For string URLs, add the token parameter
               const separator = url.includes('?') ? '&' : '?';
               modifiedInput = `${url}${separator}token=${encodeURIComponent(token)}`;
             } else if (input instanceof Request && input.method === 'GET') {

@@ -103,9 +103,19 @@ const MapTracker: React.FC = () => {
       console.log('[MapTracker] Polling for updates via REST API');
       const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
       const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-      const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}?key=${apiKey}&token=${token}`;
       
-      const response = await fetch(url);
+      // Create URL object for proper parameter handling
+      const url = new URL(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}`);
+      
+      // Add parameters properly
+      url.searchParams.set('key', apiKey);
+      url.searchParams.set('token', token);
+      
+      // Convert to string for fetch
+      const urlString = url.toString();
+      console.log('[MapTracker] Requesting:', urlString.substring(0, 70) + '...');
+      
+      const response = await fetch(urlString);
       if (!response.ok) {
         throw new Error(`REST API error: ${response.status} ${response.statusText}`);
       }
@@ -332,11 +342,8 @@ const MapTracker: React.FC = () => {
       
       <div id="map" style={{ width: "100%", height: "100%" }}></div>
       
-      {/* Show token debug helper in all environments to help troubleshoot */}
+      {/* Show token debug helper to troubleshoot token issues */}
       <TokenDebugHelper />
-      
-      {/* Add debug helper (remove in production) */}
-      {import.meta.env.DEV && <TokenDebugHelper />}
       
       {session && (
         <div className="emergency-info">
