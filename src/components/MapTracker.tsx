@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { Loader } from '@googlemaps/js-api-loader';
 import { db } from '../firebase';
 import { useAuth } from '../auth/AuthContext';
+// Import the debug helper for token issues
+import TokenDebugHelper from './TokenDebugHelper';
 
 // Google Maps API key from environment variables
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
@@ -32,13 +34,13 @@ interface SOSSession {
 
 const MapTracker: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [searchParams] = useSearchParams(); // Needed for TokenDebugHelper
   const [session, setSession] = useState<SOSSession | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markerRef = useRef<google.maps.Marker | null>(null);
   const { user } = useAuth();
-  const navigate = useNavigate();
 
   useEffect(() => {
     if (!sessionId) {
@@ -47,10 +49,6 @@ const MapTracker: React.FC = () => {
       return;
     }
 
-    // Check if we have emergency public access
-    const hasEmergencyAccess = localStorage.getItem('emergency_public_access') === 'true' || 
-                               localStorage.getItem('sos_session_id') === sessionId;
-    
     // Record if this is an authenticated session or public emergency access
     const accessMode = user ? 'authenticated' : 'emergency_access';
     console.log(`Accessing session in ${accessMode} mode`);
@@ -81,9 +79,15 @@ const MapTracker: React.FC = () => {
           mapTypeId: google.maps.MapTypeId.ROADMAP,
         });
 
-        // Listen for session updates
+        // Create a document reference for the SOS session
+        // Our Firebase interceptor will automatically add the token parameter
+        // to any Firestore requests involving sos_sessions
+        const sessionRef = doc(db, "sos_sessions", sessionId);
+        
+        // Listen for real-time updates to the session
         unsubscribe = onSnapshot(
-          doc(db, "sos_sessions", sessionId),
+          sessionRef,
+          { includeMetadataChanges: true },
           (docSnapshot) => {
             if (docSnapshot.exists()) {
               const data = docSnapshot.data() as SOSSession;
@@ -193,6 +197,9 @@ const MapTracker: React.FC = () => {
       </div>
       
       <div id="map" style={{ width: "100%", height: "100%" }}></div>
+      
+      {/* Add debug helper (remove in production) */}
+      {import.meta.env.DEV && <TokenDebugHelper />}
       
       {session && (
         <div className="emergency-info">

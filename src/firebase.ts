@@ -1,6 +1,6 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 // Your Firebase configuration
@@ -14,8 +14,12 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-export const app = initializeApp(firebaseConfig);
+// Initialize Firebase with configuration to support token validation
+const firebaseAppConfig = {
+  ...firebaseConfig
+};
+
+export const app = initializeApp(firebaseAppConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
 

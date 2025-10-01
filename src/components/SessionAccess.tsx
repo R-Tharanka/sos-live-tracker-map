@@ -45,7 +45,9 @@ const SessionAccess: React.FC = () => {
         }
 
         if (!isValidAccess && sessionData.accessToken) {
-          setError('This emergency session requires a valid access token');
+          console.error('Token validation failed:',
+            { providedToken: accessToken, requiredToken: sessionData.accessToken });
+          setError('Invalid emergency access link. Please check that you\'re using the complete link sent in the SOS message.');
           setIsValidating(false);
           return;
         }
@@ -64,12 +66,18 @@ const SessionAccess: React.FC = () => {
           console.warn('Could not log access:', logError);
         }
 
-        // Store the session ID in localStorage for simpler access management
+        // Store the session ID and access token in localStorage for simpler access management
         localStorage.setItem('sos_session_id', sessionId);
         localStorage.setItem('emergency_public_access', 'true');
+        
+        // Store the access token as well to use with Firestore queries
+        if (accessToken) {
+          localStorage.setItem('sos_access_token', accessToken);
+        }
 
         // Redirect directly to the map view without authentication
-        navigate(`/map/${sessionId}`);
+        // Include the token in the URL for the MapTracker component to use
+        navigate(accessToken ? `/map/${sessionId}?token=${accessToken}` : `/map/${sessionId}`);
       } catch (error) {
         console.error('Error validating session:', error);
         setError('Failed to validate session access');
