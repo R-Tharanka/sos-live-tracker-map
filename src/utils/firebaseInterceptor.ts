@@ -6,7 +6,10 @@
  * 
  * This is necessary because Firebase security rules require the token parameter
  * for accessing SOS session data without authentication.
+ * 
+ * Updated to fix streaming request issues and add more debugging
  */
+console.log("[TokenInterceptor] Initializing improved token interceptor v2");
 
 // Function to intercept and modify fetch requests to Firebase
 function setupFirebaseTokenInterceptor() {
@@ -34,37 +37,54 @@ function setupFirebaseTokenInterceptor() {
       // If we have a token, add it to all Firestore requests
       if (token) {
         try {
-          if (input instanceof Request) {
-            // For Request objects, we need to create a new Request with modified URL
-            const modifiedUrl = new URL(url);
-            modifiedUrl.searchParams.set('token', token);
-            
-            // Create new Request object with same properties but updated URL
-            modifiedInput = new Request(modifiedUrl.toString(), {
-              method: input.method,
-              headers: input.headers,
-              body: input.body,
-              mode: input.mode,
-              credentials: input.credentials,
-              cache: input.cache,
-              redirect: input.redirect,
-              referrer: input.referrer,
-              referrerPolicy: input.referrerPolicy,
-              integrity: input.integrity,
-              keepalive: input.keepalive,
-              signal: input.signal,
-            });
-          } else {
-            // For string URLs, simply add the token parameter
-            const separator = url.includes('?') ? '&' : '?';
-            modifiedInput = `${url}${separator}token=${encodeURIComponent(token)}`;
+          // CRITICAL FIX: Don't modify streaming requests at all
+          // These include Listen operations which require duplex setting
+          if (url.includes('/Listen/') || url.includes('channel?')) {
+            console.log("[TokenInterceptor] Skipping token injection for streaming request");
+            return originalFetch(input, init);
           }
-          console.debug('Added token to Firebase request:', url.substring(0, 50) + '...', 'Token:', token.substring(0, 5) + '...');
+          
+          // Only add token to document requests for sos_sessions collection
+          if (url.includes('sos_sessions')) {
+            console.log(`[TokenInterceptor] Adding token to sos_sessions request: ${url.substring(0, 40)}...`);
+            
+            if (typeof input === 'string') {
+              // For string URLs, simply add the token parameter
+              const separator = url.includes('?') ? '&' : '?';
+              modifiedInput = `${url}${separator}token=${encodeURIComponent(token)}`;
+            } else if (input instanceof Request && input.method === 'GET') {
+              // For GET Request objects, safely create a new Request
+              const modifiedUrl = new URL(url);
+              modifiedUrl.searchParams.set('token', token);
+              
+              // Create new Request object with same properties but updated URL
+              modifiedInput = new Request(modifiedUrl.toString(), {
+                method: input.method,
+                headers: input.headers,
+                mode: input.mode,
+                credentials: input.credentials,
+                cache: input.cache,
+                redirect: input.redirect,
+                referrer: input.referrer,
+                referrerPolicy: input.referrerPolicy as ReferrerPolicy,
+                integrity: input.integrity,
+                keepalive: input.keepalive,
+                signal: input.signal,
+                // Deliberately omit body for GET requests
+              });
+            } else {
+              // For non-GET requests with bodies, don't try to recreate the Request
+              // as it could cause duplex issues
+              console.log("[TokenInterceptor] Skipping non-GET request with body");
+              return originalFetch(input, init);
+            }
+          }
         } catch (error) {
-          console.error('Error adding token to Firebase request:', error);
+          console.error('[TokenInterceptor] Error adding token to Firebase request:', error);
+          return originalFetch(input, init); // Fall back to original request on error
         }
       } else {
-        console.warn('No token available for Firestore request');
+        console.warn('[TokenInterceptor] No token available for Firestore request');
       }
     }
     

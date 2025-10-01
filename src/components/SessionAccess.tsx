@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../auth/AuthContext';
 import './SessionAccess.css';
+
+// Get Firebase project ID from environment variables
+const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
 
 const SessionAccess: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -17,35 +20,48 @@ const SessionAccess: React.FC = () => {
   useEffect(() => {
     const validateSession = async () => {
       try {
+        console.log('[SessionAccess] Starting session validation...');
         if (!sessionId) {
           setError('Invalid session link');
           setIsValidating(false);
           return;
         }
 
-        // Check if session exists
-        const sessionRef = doc(db, 'sos_sessions', sessionId);
-        const sessionDoc = await getDoc(sessionRef);
-
-        if (!sessionDoc.exists()) {
-          setError('SOS session not found');
+        // Check if access token is provided
+        if (!accessToken) {
+          console.error('[SessionAccess] No access token provided');
+          setError('This emergency link is missing a required access token. Please use the complete link sent in the SOS message.');
           setIsValidating(false);
           return;
         }
 
-        const sessionData = sessionDoc.data();
-        let isValidAccess = false;
-        
-        // Verify the access token if provided
-        if (accessToken) {
-          // Compare with the token stored in the session
-          if (accessToken === sessionData.accessToken) {
-            isValidAccess = true;
-          }
+        // Using direct REST API to validate the session with token
+        // This avoids issues with the Firebase SDK streaming listeners
+        const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+        const restApiUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}?key=${import.meta.env.VITE_FIREBASE_API_KEY}&token=${accessToken}`;
+
+        console.log('[SessionAccess] Validating session via REST API');
+        const response = await fetch(restApiUrl);
+
+        if (!response.ok) {
+          console.error('[SessionAccess] REST API validation failed:', response.status, response.statusText);
+          setError('Invalid emergency access link. Please check that you\'re using the complete link sent in the SOS message.');
+          setIsValidating(false);
+          return;
         }
 
-        if (!isValidAccess && sessionData.accessToken) {
-          console.error('Token validation failed:',
+        const responseData = await response.json();
+        console.log('[SessionAccess] Session data retrieved successfully');
+
+        // Extract the accessToken from the fields to validate it matches the provided one
+        const sessionData = {
+          accessToken: responseData.fields?.accessToken?.stringValue || '',
+          // Extract other fields if needed
+        };
+
+        // Verify the access token matches
+        if (accessToken !== sessionData.accessToken) {
+          console.error('[SessionAccess] Token validation failed:',
             { providedToken: accessToken, requiredToken: sessionData.accessToken });
           setError('Invalid emergency access link. Please check that you\'re using the complete link sent in the SOS message.');
           setIsValidating(false);
@@ -53,33 +69,28 @@ const SessionAccess: React.FC = () => {
         }
 
         // Record this access in the session document
+        // We're still using the Firebase SDK for writing, which is less problematic
         try {
+          const sessionRef = doc(db, 'sos_sessions', sessionId);
           await updateDoc(sessionRef, {
             accessLogs: arrayUnion({
               timestamp: serverTimestamp(),
               type: 'web_access',
-              hasToken: !!accessToken
+              hasToken: true
             })
           });
         } catch (logError) {
           // Non-critical error, just log it
-          console.warn('Could not log access:', logError);
+          console.warn('[SessionAccess] Could not log access:', logError);
         }
 
+        console.log('[SessionAccess] Session validated successfully');
+        
         // Store the session ID and access token in localStorage for simpler access management
         localStorage.setItem('sos_session_id', sessionId);
         localStorage.setItem('emergency_public_access', 'true');
-        
-        // Always store the token for Firestore security rules to work properly
-        if (accessToken) {
-          localStorage.setItem('sos_access_token', accessToken);
-          console.log('Token stored in localStorage:', accessToken.substring(0, 5) + '...');
-        } else {
-          console.error('No access token available for this session.');
-          setError('This emergency link is missing a required access token. Please use the complete link sent in the SOS message.');
-          setIsValidating(false);
-          return;
-        }
+        localStorage.setItem('sos_access_token', accessToken);
+        console.log('[SessionAccess] Token stored in localStorage:', accessToken.substring(0, 5) + '...');
 
         // Redirect directly to the map view without authentication
         // Always include the token in the URL for the MapTracker component to use
