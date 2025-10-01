@@ -18,13 +18,17 @@ const firebaseConfig = {
 // Using REST API settings for queryParameterEncoding which our interceptor handles
 const firebaseAppConfig = {
   ...firebaseConfig,
-  // This ensures Firebase REST API can properly handle URL parameters
+  // These settings are crucial for the token-based access to work properly
   experimentalForceLongPolling: true,
   experimentalAutoDetectLongPolling: false,
 };
 
 export const app = initializeApp(firebaseAppConfig);
+
+// Configure Firestore with settings that help with token handling
 export const db = getFirestore(app);
+
+// Initialize authentication
 export const auth = getAuth(app);
 
 export default { app, db, auth };

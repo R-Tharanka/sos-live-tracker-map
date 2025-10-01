@@ -52,15 +52,26 @@ const MapTracker: React.FC = () => {
     // Get the token from URL parameters first
     const token = searchParams.get('token');
     
-    // If token is in URL but not in localStorage, store it
-    if (token && !localStorage.getItem('sos_access_token')) {
+    // Always update the token in localStorage from URL if available
+    if (token) {
       localStorage.setItem('sos_access_token', token);
-      console.log('Token from URL saved to localStorage');
+      console.log('Token from URL saved to localStorage:', token.substring(0, 5) + '...');
+    } else {
+      // If no token in URL but we have one in localStorage, still use it
+      const storedToken = localStorage.getItem('sos_access_token');
+      if (storedToken) {
+        console.log('Using token from localStorage:', storedToken.substring(0, 5) + '...');
+      } else {
+        console.error('No access token available for this session - neither in URL nor localStorage');
+        setError('Missing access token. Please use the complete emergency link sent in the SOS message.');
+        setLoading(false);
+        return;
+      }
     }
 
     // Record if this is an authenticated session or public emergency access
     const accessMode = user ? 'authenticated' : 'emergency_access';
-    console.log(`Accessing session in ${accessMode} mode with ${token ? 'token' : 'no token'}`);
+    console.log(`Accessing session in ${accessMode} mode with ${token ? 'token' : 'stored token'}`);
     
     // For all SOS emergency access, we'll allow viewing without login
 
@@ -207,8 +218,8 @@ const MapTracker: React.FC = () => {
       
       <div id="map" style={{ width: "100%", height: "100%" }}></div>
       
-      {/* Show token debug helper in development mode */}
-      {import.meta.env.DEV && <TokenDebugHelper />}
+      {/* Show token debug helper in all environments to help troubleshoot */}
+      <TokenDebugHelper />
       
       {/* Add debug helper (remove in production) */}
       {import.meta.env.DEV && <TokenDebugHelper />}

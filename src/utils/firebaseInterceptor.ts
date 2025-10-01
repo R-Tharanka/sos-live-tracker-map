@@ -25,42 +25,46 @@ function setupFirebaseTokenInterceptor() {
       url = input.toString();
     }
     
-    // Check if this is a Firebase Firestore request for sos_sessions
-    if (url.includes('firestore.googleapis.com') && url.includes('sos_sessions')) {
+    // Check if this is a Firebase Firestore request
+    if (url.includes('firestore.googleapis.com')) {
       // Get the token from URL params first, then localStorage as backup
       const urlParams = new URLSearchParams(window.location.search);
       const token = urlParams.get('token') || localStorage.getItem('sos_access_token');
       
-      // If we have a token, add it to the request
+      // If we have a token, add it to all Firestore requests
       if (token) {
-        if (input instanceof Request) {
-          // For Request objects, we need to create a new Request with modified URL
-          const modifiedUrl = new URL(url);
-          modifiedUrl.searchParams.set('token', token);
-          
-          // Create new Request object with same properties but updated URL
-          modifiedInput = new Request(modifiedUrl.toString(), {
-            method: input.method,
-            headers: input.headers,
-            body: input.body,
-            mode: input.mode,
-            credentials: input.credentials,
-            cache: input.cache,
-            redirect: input.redirect,
-            referrer: input.referrer,
-            referrerPolicy: input.referrerPolicy,
-            integrity: input.integrity,
-            keepalive: input.keepalive,
-            signal: input.signal,
-          });
-        } else {
-          // For string URLs, simply add the token parameter
-          const separator = url.includes('?') ? '&' : '?';
-          modifiedInput = `${url}${separator}token=${encodeURIComponent(token)}`;
+        try {
+          if (input instanceof Request) {
+            // For Request objects, we need to create a new Request with modified URL
+            const modifiedUrl = new URL(url);
+            modifiedUrl.searchParams.set('token', token);
+            
+            // Create new Request object with same properties but updated URL
+            modifiedInput = new Request(modifiedUrl.toString(), {
+              method: input.method,
+              headers: input.headers,
+              body: input.body,
+              mode: input.mode,
+              credentials: input.credentials,
+              cache: input.cache,
+              redirect: input.redirect,
+              referrer: input.referrer,
+              referrerPolicy: input.referrerPolicy,
+              integrity: input.integrity,
+              keepalive: input.keepalive,
+              signal: input.signal,
+            });
+          } else {
+            // For string URLs, simply add the token parameter
+            const separator = url.includes('?') ? '&' : '?';
+            modifiedInput = `${url}${separator}token=${encodeURIComponent(token)}`;
+          }
+          console.debug('Added token to Firebase request:', url.substring(0, 50) + '...', 'Token:', token.substring(0, 5) + '...');
+        } catch (error) {
+          console.error('Error adding token to Firebase request:', error);
         }
-        console.debug('Added token to Firebase request', url.substring(0, 50) + '...');
       } else {
-        console.warn('No token available for SOS session request');
+        console.warn('No token available for Firestore request');
       }
     }
     
