@@ -15,8 +15,12 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase with configuration to support token validation
+// Using REST API settings for queryParameterEncoding which our interceptor handles
 const firebaseAppConfig = {
-  ...firebaseConfig
+  ...firebaseConfig,
+  // This ensures Firebase REST API can properly handle URL parameters
+  experimentalForceLongPolling: true,
+  experimentalAutoDetectLongPolling: false,
 };
 
 export const app = initializeApp(firebaseAppConfig);

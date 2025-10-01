@@ -70,14 +70,20 @@ const SessionAccess: React.FC = () => {
         localStorage.setItem('sos_session_id', sessionId);
         localStorage.setItem('emergency_public_access', 'true');
         
-        // Store the access token as well to use with Firestore queries
+        // Always store the token for Firestore security rules to work properly
         if (accessToken) {
           localStorage.setItem('sos_access_token', accessToken);
+          console.log('Token stored in localStorage:', accessToken.substring(0, 5) + '...');
+        } else {
+          console.error('No access token available for this session.');
+          setError('This emergency link is missing a required access token. Please use the complete link sent in the SOS message.');
+          setIsValidating(false);
+          return;
         }
 
         // Redirect directly to the map view without authentication
-        // Include the token in the URL for the MapTracker component to use
-        navigate(accessToken ? `/map/${sessionId}?token=${accessToken}` : `/map/${sessionId}`);
+        // Always include the token in the URL for the MapTracker component to use
+        navigate(`/map/${sessionId}?token=${accessToken}`);
       } catch (error) {
         console.error('Error validating session:', error);
         setError('Failed to validate session access');

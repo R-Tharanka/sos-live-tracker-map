@@ -1,5 +1,12 @@
-// This script adds a token parameter to Firebase REST API calls
-// This is needed for SOS session access without authentication
+/**
+ * Firebase Fetch Interceptor
+ * 
+ * This utility overrides the global fetch to automatically add the SOS access token
+ * to any requests made to Firestore that involve sos_sessions.
+ * 
+ * This is necessary because Firebase security rules require the token parameter
+ * for accessing SOS session data without authentication.
+ */
 
 // Function to intercept and modify fetch requests to Firebase
 function setupFirebaseTokenInterceptor() {
@@ -9,28 +16,55 @@ function setupFirebaseTokenInterceptor() {
   // Define a new fetch function that adds token to Firebase requests
   const newFetch: typeof fetch = (input, init) => {
     let modifiedInput = input;
+    let url: string;
     
-    // Only process if it's a string URL
-    if (typeof input === 'string') {
-      // Check if this is a Firebase Firestore request
-      if (input.includes('firestore.googleapis.com') && 
-          input.includes('sos_sessions')) {
-        
-        // Get the token from localStorage or URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token') || localStorage.getItem('sos_access_token');
-        
-        // If we have a token, add it to the URL
-        if (token) {
-          // Add the token parameter to the URL
-          const separator = input.includes('?') ? '&' : '?';
-          modifiedInput = `${input}${separator}token=${encodeURIComponent(token)}`;
-          console.log('Added token to Firebase request');
+    // Handle Request objects and string URLs
+    if (input instanceof Request) {
+      url = input.url;
+    } else {
+      url = input.toString();
+    }
+    
+    // Check if this is a Firebase Firestore request for sos_sessions
+    if (url.includes('firestore.googleapis.com') && url.includes('sos_sessions')) {
+      // Get the token from URL params first, then localStorage as backup
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token') || localStorage.getItem('sos_access_token');
+      
+      // If we have a token, add it to the request
+      if (token) {
+        if (input instanceof Request) {
+          // For Request objects, we need to create a new Request with modified URL
+          const modifiedUrl = new URL(url);
+          modifiedUrl.searchParams.set('token', token);
+          
+          // Create new Request object with same properties but updated URL
+          modifiedInput = new Request(modifiedUrl.toString(), {
+            method: input.method,
+            headers: input.headers,
+            body: input.body,
+            mode: input.mode,
+            credentials: input.credentials,
+            cache: input.cache,
+            redirect: input.redirect,
+            referrer: input.referrer,
+            referrerPolicy: input.referrerPolicy,
+            integrity: input.integrity,
+            keepalive: input.keepalive,
+            signal: input.signal,
+          });
+        } else {
+          // For string URLs, simply add the token parameter
+          const separator = url.includes('?') ? '&' : '?';
+          modifiedInput = `${url}${separator}token=${encodeURIComponent(token)}`;
         }
+        console.debug('Added token to Firebase request', url.substring(0, 50) + '...');
+      } else {
+        console.warn('No token available for SOS session request');
       }
     }
     
-    // Call original fetch with possibly modified URL
+    // Call original fetch with possibly modified input
     return originalFetch(modifiedInput, init);
   };
   

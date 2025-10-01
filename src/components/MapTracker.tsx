@@ -48,10 +48,19 @@ const MapTracker: React.FC = () => {
       setLoading(false);
       return;
     }
+    
+    // Get the token from URL parameters first
+    const token = searchParams.get('token');
+    
+    // If token is in URL but not in localStorage, store it
+    if (token && !localStorage.getItem('sos_access_token')) {
+      localStorage.setItem('sos_access_token', token);
+      console.log('Token from URL saved to localStorage');
+    }
 
     // Record if this is an authenticated session or public emergency access
     const accessMode = user ? 'authenticated' : 'emergency_access';
-    console.log(`Accessing session in ${accessMode} mode`);
+    console.log(`Accessing session in ${accessMode} mode with ${token ? 'token' : 'no token'}`);
     
     // For all SOS emergency access, we'll allow viewing without login
 
@@ -197,6 +206,9 @@ const MapTracker: React.FC = () => {
       </div>
       
       <div id="map" style={{ width: "100%", height: "100%" }}></div>
+      
+      {/* Show token debug helper in development mode */}
+      {import.meta.env.DEV && <TokenDebugHelper />}
       
       {/* Add debug helper (remove in production) */}
       {import.meta.env.DEV && <TokenDebugHelper />}
