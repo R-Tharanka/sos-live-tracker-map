@@ -283,8 +283,8 @@ const MapTracker: React.FC = () => {
           // Initial fetch
           await pollData();
           
-          // Set up polling - now checking every 1 second instead of 3 seconds
-          pollingInterval = window.setInterval(pollData, 1000);
+          // Set up polling - using 3 seconds as a balance between responsiveness and resource usage
+          pollingInterval = window.setInterval(pollData, 3000);
         }
       } catch (err) {
         console.error("[MapTracker] Error initializing map:", err);
