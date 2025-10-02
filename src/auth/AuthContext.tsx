@@ -6,8 +6,6 @@ import {
   onAuthStateChanged,
   sendPasswordResetEmail,
   createUserWithEmailAndPassword,
-  EmailAuthProvider,
-  linkWithCredential,
   User
 } from 'firebase/auth';
 import { app } from '../firebase';

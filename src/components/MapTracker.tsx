@@ -4,15 +4,11 @@ import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { Loader } from '@googlemaps/js-api-loader';
 import { db } from '../firebase';
 import { useAuth } from '../auth/AuthContext';
-// Import the debug helper for token issues
+// Import the debug helper for token issues if needed for troubleshooting
 import TokenDebugHelper from './TokenDebugHelper';
 
 // Google Maps API key from environment variables
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-const PROJECT_ID = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-const FIREBASE_API_KEY = import.meta.env.VITE_FIREBASE_API_KEY;
-// How often to poll for updates in milliseconds (for unauthenticated access)
-const POLLING_INTERVAL = 3000;
 
 // Interface for SOS session data
 interface SOSSession {
@@ -95,8 +91,8 @@ const MapTracker: React.FC = () => {
   // Function to fetch session data via REST API (for unauthenticated access)
   const fetchSessionData = useCallback(async () => {
     try {
-      const token = searchParams.get('token') || localStorage.getItem('sos_access_token');
-      if (!token || !sessionId) {
+      const currentToken = searchParams.get('token') || localStorage.getItem('sos_access_token');
+      if (!currentToken || !sessionId) {
         throw new Error("Missing token or session ID");
       }
       
@@ -104,23 +100,20 @@ const MapTracker: React.FC = () => {
       const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
       const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
       
-      // Create URL object for proper parameter handling
-      const url = new URL(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}`);
+      // Import and use TokenValidator utilities
+      // @ts-ignore
+      const { validateSosToken } = await import('../utils/TokenValidator');
       
-      // Add parameters properly
-      url.searchParams.set('key', apiKey);
-      url.searchParams.set('token', token);
+      // Validate the token first before proceeding
+      const validationResult = await validateSosToken(sessionId, currentToken, projectId, apiKey);
       
-      // Convert to string for fetch
-      const urlString = url.toString();
-      console.log('[MapTracker] Requesting:', urlString.substring(0, 70) + '...');
-      
-      const response = await fetch(urlString);
-      if (!response.ok) {
-        throw new Error(`REST API error: ${response.status} ${response.statusText}`);
+      if (!validationResult.isValid) {
+        console.error('[MapTracker] Token validation failed:', validationResult.error);
+        throw new Error(`Token validation failed: ${validationResult.error}`);
       }
       
-      const rawData = await response.json();
+      // If validation succeeded, we can use the session data directly
+      const rawData = validationResult.sessionData;
       
       // Convert Firestore REST API response format to our SOSSession type
       const convertedData: SOSSession = {
@@ -155,28 +148,31 @@ const MapTracker: React.FC = () => {
           name: userFields.name?.stringValue || '',
           bloodType: userFields.bloodType?.stringValue,
           age: userFields.age?.integerValue ? parseInt(userFields.age.integerValue) : undefined,
+          // Initialize empty arrays to avoid undefined errors
+          medicalConditions: [],
+          allergies: [],
+          medications: [],
+          notes: userFields.notes?.stringValue
         };
         
-        // Convert arrays
-        if (userFields.medicalConditions?.arrayValue?.values) {
+        // Convert arrays safely
+        if (userFields.medicalConditions?.arrayValue?.values && convertedData.userInfo) {
           convertedData.userInfo.medicalConditions = userFields.medicalConditions.arrayValue.values.map(
             (v: any) => v.stringValue || ''
           );
         }
         
-        if (userFields.allergies?.arrayValue?.values) {
+        if (userFields.allergies?.arrayValue?.values && convertedData.userInfo) {
           convertedData.userInfo.allergies = userFields.allergies.arrayValue.values.map(
             (v: any) => v.stringValue || ''
           );
         }
         
-        if (userFields.medications?.arrayValue?.values) {
+        if (userFields.medications?.arrayValue?.values && convertedData.userInfo) {
           convertedData.userInfo.medications = userFields.medications.arrayValue.values.map(
             (v: any) => v.stringValue || ''
           );
         }
-        
-        convertedData.userInfo.notes = userFields.notes?.stringValue;
       }
       
       return convertedData;
@@ -194,12 +190,12 @@ const MapTracker: React.FC = () => {
     }
     
     // Get the token from URL parameters first
-    const token = searchParams.get('token');
+    const urlToken = searchParams.get('token');
     
     // Always update the token in localStorage from URL if available
-    if (token) {
-      localStorage.setItem('sos_access_token', token);
-      console.log('[MapTracker] Token from URL saved to localStorage:', token.substring(0, 5) + '...');
+    if (urlToken) {
+      localStorage.setItem('sos_access_token', urlToken);
+      console.log('[MapTracker] Token from URL saved to localStorage:', urlToken.substring(0, 5) + '...');
     } else {
       // If no token in URL but we have one in localStorage, still use it
       const storedToken = localStorage.getItem('sos_access_token');
@@ -212,10 +208,10 @@ const MapTracker: React.FC = () => {
         return;
       }
     }
-
+    
     // Record if this is an authenticated session or public emergency access
     const accessMode = user ? 'authenticated' : 'emergency_access';
-    console.log(`[MapTracker] Accessing session in ${accessMode} mode with ${token ? 'token from URL' : 'stored token'}`);
+    console.log(`[MapTracker] Accessing session in ${accessMode} mode with ${urlToken ? 'token from URL' : 'stored token'}`);
     
     // Load Google Maps
     const loader = new Loader({
@@ -287,8 +283,8 @@ const MapTracker: React.FC = () => {
           // Initial fetch
           await pollData();
           
-          // Set up polling
-          pollingInterval = window.setInterval(pollData, 3000);
+          // Set up polling - now checking every 1 second instead of 3 seconds
+          pollingInterval = window.setInterval(pollData, 1000);
         }
       } catch (err) {
         console.error("[MapTracker] Error initializing map:", err);
