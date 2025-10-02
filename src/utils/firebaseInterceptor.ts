@@ -44,51 +44,12 @@ function setupFirebaseTokenInterceptor() {
             return originalFetch(input, init);
           }
           
-          // Only process requests for sos_sessions collection
+          // Only process requests for sos_sessions collection (logging only)
           if (url.includes('sos_sessions')) {
             console.log(`[TokenInterceptor] Processing sos_sessions request: ${url.substring(0, 40)}...`);
-            
-            // Don't modify the URL with token parameter anymore
-            // Instead, let's make sure the init has the right headers
-            if (!init) {
-              init = {};
-            }
-            
-            if (!init.headers) {
-              init.headers = {};
-            }
-            
-            console.log('[TokenInterceptor] Adding token to request');
-            if (typeof input === 'string') {
-              // For string URLs, add the token parameter
-              const separator = url.includes('?') ? '&' : '?';
-              modifiedInput = `${url}${separator}token=${encodeURIComponent(token)}`;
-            } else if (input instanceof Request && input.method === 'GET') {
-              // For GET Request objects, safely create a new Request
-              const modifiedUrl = new URL(url);
-              modifiedUrl.searchParams.set('token', token);
-              
-              // Create new Request object with same properties but updated URL
-              modifiedInput = new Request(modifiedUrl.toString(), {
-                method: input.method,
-                headers: input.headers,
-                mode: input.mode,
-                credentials: input.credentials,
-                cache: input.cache,
-                redirect: input.redirect,
-                referrer: input.referrer,
-                referrerPolicy: input.referrerPolicy as ReferrerPolicy,
-                integrity: input.integrity,
-                keepalive: input.keepalive,
-                signal: input.signal,
-                // Deliberately omit body for GET requests
-              });
-            } else {
-              // For non-GET requests with bodies, don't try to recreate the Request
-              // as it could cause duplex issues
-              console.log("[TokenInterceptor] Skipping non-GET request with body");
-              return originalFetch(input, init);
-            }
+            // No longer append the token as a query parameter because Firestore REST API
+            // treats unknown params as errors (400). Validation now happens client-side
+            // after the document is fetched.
           }
         } catch (error) {
           console.error('[TokenInterceptor] Error adding token to Firebase request:', error);
