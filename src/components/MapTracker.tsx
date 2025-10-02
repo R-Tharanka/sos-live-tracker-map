@@ -227,16 +227,31 @@ const MapTracker: React.FC = () => {
       try {
         await loader.load();
         
-        // Create map instance
-        const mapElement = document.getElementById("map") as HTMLElement;
-        mapRef.current = new google.maps.Map(mapElement, {
-          center: { lat: 0, lng: 0 },
-          zoom: 15,
-          mapTypeControl: true,
-          fullscreenControl: true,
-          streetViewControl: false,
-          mapTypeId: google.maps.MapTypeId.ROADMAP,
-        });
+        // Create map instance - add a small delay to ensure the DOM is fully loaded
+        setTimeout(() => {
+          try {
+            const mapElement = document.getElementById("map");
+            if (!mapElement) {
+              console.error('[MapTracker] Map element not found in DOM');
+              setError("Error initializing map: Map element not found");
+              setLoading(false);
+              return;
+            }
+            
+            mapRef.current = new google.maps.Map(mapElement, {
+              center: { lat: 0, lng: 0 },
+              zoom: 15,
+              mapTypeControl: true,
+              fullscreenControl: true,
+              streetViewControl: false,
+              mapTypeId: google.maps.MapTypeId.ROADMAP,
+            });
+          } catch (error) {
+            console.error('[MapTracker] Error during map initialization:', error);
+            setError(`Error initializing map: ${error instanceof Error ? error.message : String(error)}`);
+            setLoading(false);
+          }
+        }, 500); // Give the DOM time to render
 
         // Use different approaches for authenticated vs public access
         if (user) {
@@ -336,7 +351,15 @@ const MapTracker: React.FC = () => {
         )}
       </div>
       
-      <div id="map" style={{ width: "100%", height: "100%" }}></div>
+      {/* Ensure map div has explicit height and is positioned correctly */}
+      <div id="map" style={{ 
+        width: "100%", 
+        height: "calc(100% - 100px)", 
+        position: "absolute",
+        top: "60px", 
+        left: 0, 
+        right: 0
+      }}></div>
       
       {/* Show token debug helper to troubleshoot token issues */}
       <TokenDebugHelper />
