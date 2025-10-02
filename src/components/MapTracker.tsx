@@ -227,9 +227,10 @@ const MapTracker: React.FC = () => {
       try {
         await loader.load();
         
-        // Create map instance - add a small delay to ensure the DOM is fully loaded
+        // Wait for DOM to be fully loaded before initializing map
         setTimeout(() => {
           try {
+            // Ensure the map div exists
             const mapElement = document.getElementById("map");
             if (!mapElement) {
               console.error('[MapTracker] Map element not found in DOM');
@@ -238,6 +239,13 @@ const MapTracker: React.FC = () => {
               return;
             }
             
+            // Make sure the map element is visible and has dimensions
+            mapElement.style.width = "100%";
+            mapElement.style.height = "calc(100% - 200px)";
+            
+            console.log('[MapTracker] Initializing map with element:', mapElement);
+            
+            // Create the map instance
             mapRef.current = new google.maps.Map(mapElement, {
               center: { lat: 0, lng: 0 },
               zoom: 15,
@@ -246,12 +254,14 @@ const MapTracker: React.FC = () => {
               streetViewControl: false,
               mapTypeId: google.maps.MapTypeId.ROADMAP,
             });
+            
+            console.log('[MapTracker] Map initialized successfully');
           } catch (error) {
             console.error('[MapTracker] Error during map initialization:', error);
             setError(`Error initializing map: ${error instanceof Error ? error.message : String(error)}`);
             setLoading(false);
           }
-        }, 500); // Give the DOM time to render
+        }, 1000); // Give more time for the DOM to render completely
 
         // Use different approaches for authenticated vs public access
         if (user) {
@@ -337,7 +347,34 @@ const MapTracker: React.FC = () => {
   }
 
   if (error) {
-    return <div className="error-message">{error}</div>;
+    return (
+      <div className="error-container">
+        <div className="error-message">
+          <h2>Error Loading Emergency Location</h2>
+          <p>{error}</p>
+          <p>This may be due to:</p>
+          <ul>
+            <li>Invalid or expired emergency link</li>
+            <li>The emergency has been resolved</li>
+            <li>Network connection issues</li>
+          </ul>
+          <button 
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '10px 15px',
+              background: '#0284c7',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginTop: '15px'
+            }}
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -354,15 +391,15 @@ const MapTracker: React.FC = () => {
       {/* Ensure map div has explicit height and is positioned correctly */}
       <div id="map" style={{ 
         width: "100%", 
-        height: "calc(100% - 100px)", 
+        height: "calc(100% - 200px)", 
         position: "absolute",
         top: "60px", 
         left: 0, 
-        right: 0
+        right: 0,
+        zIndex: 1
       }}></div>
       
       {/* Show token debug helper to troubleshoot token issues */}
-      <TokenDebugHelper />
       
       {session && (
         <div className="emergency-info">

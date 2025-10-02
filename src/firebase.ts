@@ -14,13 +14,15 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase with configuration to support token validation
-// Using REST API settings for queryParameterEncoding which our interceptor handles
+// Initialize Firebase with optimized configuration for the tracker
+// We're using long polling to ensure reliable updates even on poor connections
 const firebaseAppConfig = {
   ...firebaseConfig,
-  // These settings are crucial for the token-based access to work properly
+  // These settings ensure reliable connection even on weak networks
   experimentalForceLongPolling: true,
   experimentalAutoDetectLongPolling: false,
+  // Use cache to ensure we can access data offline if connection drops
+  cacheSizeBytes: 10485760, // 10MB
 };
 
 export const app = initializeApp(firebaseAppConfig);

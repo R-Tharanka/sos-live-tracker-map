@@ -40,18 +40,21 @@ export async function validateSosToken(sessionId, token, projectId, apiKey) {
   try {
     console.log(`[TokenValidator] Checking session existence: ${sessionId}`);
     
-    // Create the REST API URL with proper encoding
+    // Create the REST API URL - don't include token as query param
     const url = new URL(`https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/sos_sessions/${sessionId}`);
     url.searchParams.set('key', apiKey);
-    url.searchParams.set('token', token); // Pass token for security rules
     
-    // Make the request
+    // Make the request - we'll get the document directly without token validation
+    // since our updated Firestore rules will handle access control
     const response = await fetch(url.toString(), {
       method: 'GET',
       headers: {
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
       }
     });
+    
+    console.log(`[TokenValidator] Made request to ${url.toString().substring(0, 50)}...`);
     
     // Check if the request was successful
     if (!response.ok) {
@@ -77,14 +80,43 @@ export async function validateSosToken(sessionId, token, projectId, apiKey) {
     // Parse the response
     const data = await response.json();
     
-    // We don't need to validate the token anymore, just check that the document exists
-    // This matches our updated Firestore security rules
-    console.log('[TokenValidator] Session exists, allowing access');
-    return {
-      isValid: true,
-      error: null,
-      sessionData: data
-    };
+    // Compare the token with the session's accessToken field
+    const sessionData = data?.fields;
+    const storedAccessToken = sessionData?.accessToken?.stringValue;
+    
+    if (sessionData && storedAccessToken) {
+      // The session exists and has an accessToken, so we can now validate it
+      if (storedAccessToken === token) {
+        console.log('[TokenValidator] Token valid, session exists, allowing access');
+        return {
+          isValid: true,
+          error: null,
+          sessionData: data
+        };
+      } else {
+        console.error('[TokenValidator] Token mismatch, denying access');
+        return {
+          isValid: false,
+          error: 'Invalid access token',
+          sessionData: null
+        };
+      }
+    } else if (sessionData) {
+      // Session exists but no accessToken field, fallback to old behavior
+      console.log('[TokenValidator] Session exists but no accessToken field, allowing access');
+      return {
+        isValid: true,
+        error: null,
+        sessionData: data
+      };
+    } else {
+      console.error('[TokenValidator] No session data found');
+      return {
+        isValid: false,
+        error: 'Session not found',
+        sessionData: null
+      };
+    }
   } catch (error) {
     console.error('[TokenValidator] Error checking session:', error);
     return {

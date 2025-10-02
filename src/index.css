@@ -28,6 +28,14 @@ body {
   color: #0284c7;
 }
 
+.error-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+}
+
 .error-message {
   padding: 20px;
   margin: 20px;
@@ -35,6 +43,18 @@ body {
   border: 1px solid #f87171;
   border-radius: 6px;
   color: #b91c1c;
+  max-width: 500px;
+  text-align: left;
+}
+
+.error-message h2 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1.5rem;
+}
+
+.error-message ul {
+  margin-left: 20px;
 }
 
 .map-container {
