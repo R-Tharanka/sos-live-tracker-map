@@ -83,13 +83,13 @@ const MapTracker: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
-  // Emergency session state and UI feedback flags
+  // Primary reactive state describing the SOS session, UI progress, and any blocking errors
   const [session, setSession] = useState<SOSSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('Preparing live tracker...');
   const [error, setError] = useState<string | null>(null);
 
-  // Refs for Google Maps artefacts so they persist between renders
+  // Cache Google Maps primitives in refs so we don't recreate them across renders
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const loaderRef = useRef<Loader | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -98,7 +98,7 @@ const MapTracker: React.FC = () => {
 
   const isDebugMode = import.meta.env.DEV;
 
-  // Lazily instantiate the Google Maps loader only once per session
+  // Instantiate the Google Maps JS loader once; subsequent renders reuse the same loader instance
   const loader = useMemo(() => {
     if (!GOOGLE_MAPS_API_KEY) {
       return null;
@@ -114,7 +114,7 @@ const MapTracker: React.FC = () => {
     return loaderRef.current;
   }, []);
 
-  // Keep the map marker and accuracy ring in sync with the latest session data
+  // Position the marker (and optional accuracy circle) whenever fresh session data arrives
   const updateMapMarker = useCallback((data: SOSSession) => {
     if (!data.location || !mapRef.current) return;
 
@@ -164,7 +164,7 @@ const MapTracker: React.FC = () => {
     }
   }, []);
 
-  // Ensure the map container exists before instantiating Google Maps
+  // Wait until the DOM has rendered the map container before constructing the Google map instance
   const ensureMapReady = useCallback(async () => {
     if (mapRef.current) {
       return mapRef.current;
@@ -196,7 +196,7 @@ const MapTracker: React.FC = () => {
     return mapRef.current;
   }, [loader]);
 
-  // Fetch SOS session data through the REST token validator when unauthenticated
+  // For emergency viewers without auth, poll the REST endpoint to retrieve session metadata
   const fetchSessionData = useCallback(
     async (accessToken: string): Promise<SOSSession | null> => {
       if (!sessionId) return null;
@@ -280,6 +280,7 @@ const MapTracker: React.FC = () => {
       try {
         setStatusMessage('Validating access...');
 
+        // Persist the access token from the URL for subsequent refreshes / polling cycles
         const urlToken = searchParams.get('token');
         if (urlToken) {
           localStorage.setItem('sos_access_token', urlToken);
@@ -298,6 +299,7 @@ const MapTracker: React.FC = () => {
 
         setStatusMessage('Connecting to live updates...');
 
+        // Central handler for both Firestore snapshot data and REST polling payloads
         const handleIncomingSession = (data: SOSSession | null) => {
           if (!isMounted || !data) return;
 
@@ -309,6 +311,7 @@ const MapTracker: React.FC = () => {
         };
 
         if (user) {
+          // Authenticated viewers get realtime Firestore updates
           const sessionRef = doc(db, 'sos_sessions', sessionId);
           unsubscribe = onSnapshot(
             sessionRef,
@@ -330,6 +333,7 @@ const MapTracker: React.FC = () => {
             },
           );
         } else {
+          // Public viewers fall back to short-polling the REST endpoint for the same data
           const poll = async () => {
             const data = await fetchSessionData(accessToken);
             if (!isMounted) return;
