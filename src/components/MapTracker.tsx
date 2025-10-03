@@ -83,11 +83,13 @@ const MapTracker: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
+  // Emergency session state and UI feedback flags
   const [session, setSession] = useState<SOSSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [statusMessage, setStatusMessage] = useState('Preparing live tracker...');
   const [error, setError] = useState<string | null>(null);
 
+  // Refs for Google Maps artefacts so they persist between renders
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const loaderRef = useRef<Loader | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -96,6 +98,7 @@ const MapTracker: React.FC = () => {
 
   const isDebugMode = import.meta.env.DEV;
 
+  // Lazily instantiate the Google Maps loader only once per session
   const loader = useMemo(() => {
     if (!GOOGLE_MAPS_API_KEY) {
       return null;
@@ -111,6 +114,7 @@ const MapTracker: React.FC = () => {
     return loaderRef.current;
   }, []);
 
+  // Keep the map marker and accuracy ring in sync with the latest session data
   const updateMapMarker = useCallback((data: SOSSession) => {
     if (!data.location || !mapRef.current) return;
 
@@ -160,6 +164,7 @@ const MapTracker: React.FC = () => {
     }
   }, []);
 
+  // Ensure the map container exists before instantiating Google Maps
   const ensureMapReady = useCallback(async () => {
     if (mapRef.current) {
       return mapRef.current;
@@ -191,6 +196,7 @@ const MapTracker: React.FC = () => {
     return mapRef.current;
   }, [loader]);
 
+  // Fetch SOS session data through the REST token validator when unauthenticated
   const fetchSessionData = useCallback(
     async (accessToken: string): Promise<SOSSession | null> => {
       if (!sessionId) return null;

@@ -18,6 +18,17 @@ This web application serves as the companion to the ClimateReady mobile app's SO
 - **Medical Information Display**: Shows critical medical information if configured by the user
 - **Responsive Design**: Works on desktop and mobile devices
 - **Secure Access**: Uses secure tokens to ensure only authorized contacts can view the information
+- **Guided Emergency UI**: Contextual overlays, status banners, and refreshed styling help responders understand session state at a glance
+- **Developer Diagnostics**: Optional token debugger (enabled in development) assists with troubleshooting access links
+
+## Application Routes
+
+- `/` – Login screen
+- `/login` – Explicit login route for administrators
+- `/access/:sessionId` – Authenticates and grants access to an SOS session
+- `/session/:sessionId` – Token validation hand-off for shared links
+- `/map/:sessionId` – Public emergency tracker view
+- `*` – Fallback not-found page
 
 ## Technologies Used
 
@@ -51,12 +62,26 @@ This web application serves as the companion to the ClimateReady mobile app's SO
    yarn install
    ```
 
-3. Create a `.env` file based on `.env.example`:
+3. (Optional) Generate a production build locally:
+   ```bash
+   npm run build
+   # or
+   yarn build
+   ```
+
+4. Start the development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+5. Create a `.env` file based on `.env.example`:
    ```bash
    cp .env.example .env
    ```
 
-4. Configure your `.env` file with your Firebase and Google Maps API credentials:
+6. Configure your `.env` file with your Firebase and Google Maps API credentials:
    ```
    # Firebase Configuration
    VITE_FIREBASE_API_KEY=your-api-key
@@ -74,12 +99,7 @@ This web application serves as the companion to the ClimateReady mobile app's SO
    VITE_APP_NAME=ClimateReady SOS Tracker
    ```
 
-5. Start the development server:
-   ```bash
-   npm run dev
-   # or
-   yarn dev
-   ```
+7. Launch the tracker in development (after configuring environment variables) using the command above.
 
 ## Deployment
 
@@ -104,7 +124,7 @@ This web application serves as the companion to the ClimateReady mobile app's SO
    - Add all the variables from your `.env` file
    - Update `VITE_APP_URL` to your deployed URL
 
-5. Update the main ClimateReady app's environment variables:
+6. Update the main ClimateReady app's environment variables:
    - Set `SOS_WEB_APP_URL` to your deployed URL
 
 ### Deployment Troubleshooting
@@ -130,7 +150,9 @@ If you encounter 404 errors when navigating directly to routes like `/login` or 
    <img src="/logo.png" alt="Logo" />
    ```
 
-3. Make sure your environment variables are correctly set in the Vercel dashboard
+3. Verify the production build output (`npm run build`) is not checked into version control—the generated `build/` folder is now ignored by default.
+
+4. Make sure your environment variables are correctly set in the Vercel dashboard
 
 ### Alternative Deployment Options
 
