@@ -1,467 +1,473 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { doc, onSnapshot, Timestamp } from 'firebase/firestore';
 import { Loader } from '@googlemaps/js-api-loader';
 import { db } from '../firebase';
 import { useAuth } from '../auth/AuthContext';
-// Import the debug helper for token issues if needed for troubleshooting
 import TokenDebugHelper from './TokenDebugHelper';
 
-// Google Maps API key from environment variables
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-// Interface for SOS session data
-interface SOSSession {
-  userId: string;
-  startTime: Timestamp;
-  active: boolean;
-  location?: {
-    latitude: number;
-    longitude: number;
-    accuracy?: number;
-    timestamp: Timestamp;
-  };
-  userInfo?: {
-    name: string;
-    bloodType?: string;
-    age?: number;
-    medicalConditions?: string[];
-    allergies?: string[];
-    medications?: string[];
-    notes?: string;
-  };
+interface SOSLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number;
+  timestamp?: Timestamp;
 }
+
+interface SOSUserInfo {
+  name?: string;
+  bloodType?: string;
+  age?: number;
+  medicalConditions?: string[];
+  allergies?: string[];
+  medications?: string[];
+  notes?: string;
+}
+
+interface SOSSession {
+  userId?: string;
+  startTime?: Timestamp;
+  active?: boolean;
+  location?: SOSLocation;
+  userInfo?: SOSUserInfo;
+}
+
+const MAP_OPTIONS: google.maps.MapOptions = {
+  center: { lat: 0, lng: 0 },
+  zoom: 16,
+  mapTypeControl: true,
+  fullscreenControl: true,
+  streetViewControl: false,
+  mapTypeId: 'roadmap',
+  disableDefaultUI: false,
+};
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const convertToTimestamp = (value?: string | number): Timestamp | undefined => {
+  if (!value) return undefined;
+
+  if (typeof value === 'number') {
+    return Timestamp.fromMillis(value);
+  }
+
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return undefined;
+
+  return Timestamp.fromMillis(parsed);
+};
+
+const readNumber = (value?: { doubleValue?: number; integerValue?: string | number; stringValue?: string }): number | undefined => {
+  if (!value) return undefined;
+  if (typeof value.doubleValue === 'number') return value.doubleValue;
+  if (typeof value.integerValue === 'number') return value.integerValue;
+  if (typeof value.integerValue === 'string') {
+    const parsed = Number(value.integerValue);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  if (typeof value.stringValue === 'string') {
+    const parsed = Number(value.stringValue);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+  return undefined;
+};
+
+const readStringArray = (values?: Array<{ stringValue?: string }>): string[] => {
+  if (!values?.length) return [];
+  return values.map((value) => value.stringValue || '').filter(Boolean);
+};
 
 const MapTracker: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const [searchParams] = useSearchParams(); // Needed for TokenDebugHelper
-  const [session, setSession] = useState<SOSSession | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
 
-  // Define function to update map marker based on session data
-  const updateMapMarker = useCallback((data: SOSSession) => {
-    if (data.location) {
-      const position = {
-        lat: data.location.latitude,
-        lng: data.location.longitude
-      };
-      
-      // Center map on new location
-      mapRef.current?.setCenter(position);
-      
-      // Create or update marker
-      if (markerRef.current) {
-        markerRef.current.setPosition(position);
-      } else {
-        markerRef.current = new google.maps.Marker({
-          position,
-          map: mapRef.current,
-          title: data.userInfo?.name || "SOS Location",
-          icon: {
-            path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
-            fillColor: "#FF0000",
-            fillOpacity: 1,
-            strokeWeight: 2,
-            strokeColor: "#FFFFFF",
-          },
-        });
-      }
-      
-      // Add accuracy circle if accuracy is provided
-      if (data.location.accuracy) {
-        new google.maps.Circle({
-          map: mapRef.current,
-          center: position,
-          radius: data.location.accuracy,
-          strokeColor: "#FF0000",
-          strokeOpacity: 0.8,
-          strokeWeight: 1,
-          fillColor: "#FF0000",
-          fillOpacity: 0.1,
-        });
-      }
-    }
-  }, []);
-  
-  // Function to fetch session data via REST API (for unauthenticated access)
-  const fetchSessionData = useCallback(async () => {
-    try {
-      const currentToken = searchParams.get('token') || localStorage.getItem('sos_access_token');
-      if (!currentToken || !sessionId) {
-        throw new Error("Missing token or session ID");
-      }
-      
-      console.log('[MapTracker] Polling for updates via REST API');
-      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-      const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-      
-      // Import and use TokenValidator utilities
-      // @ts-ignore
-      const { validateSosToken } = await import('../utils/TokenValidator');
-      
-      // Validate the token first before proceeding
-      const validationResult = await validateSosToken(sessionId, currentToken, projectId, apiKey);
-      
-      if (!validationResult.isValid) {
-        console.error('[MapTracker] Token validation failed:', validationResult.error);
-        throw new Error(`Token validation failed: ${validationResult.error}`);
-      }
-      
-      // If validation succeeded, we can use the session data directly
-      const rawData = validationResult.sessionData;
-      
-      // Convert Firestore REST API response format to our SOSSession type
-      const convertedData: SOSSession = {
-        userId: rawData.fields?.userId?.stringValue || '',
-        startTime: new Timestamp(
-          rawData.fields?.startTime?.timestampValue ? 
-          Math.floor(new Date(rawData.fields.startTime.timestampValue).getTime() / 1000) : 0,
-          0
-        ),
-        active: rawData.fields?.active?.booleanValue || false,
-      };
-      
-      // Convert location if present
-      if (rawData.fields?.location?.mapValue?.fields) {
-        const locFields = rawData.fields.location.mapValue.fields;
-        convertedData.location = {
-          latitude: locFields.latitude?.doubleValue || 0,
-          longitude: locFields.longitude?.doubleValue || 0,
-          accuracy: locFields.accuracy?.doubleValue,
-          timestamp: new Timestamp(
-            locFields.timestamp?.timestampValue ? 
-            Math.floor(new Date(locFields.timestamp.timestampValue).getTime() / 1000) : 0,
-            0
-          )
-        };
-      }
-      
-      // Convert user info if present
-      if (rawData.fields?.userInfo?.mapValue?.fields) {
-        const userFields = rawData.fields.userInfo.mapValue.fields;
-        convertedData.userInfo = {
-          name: userFields.name?.stringValue || '',
-          bloodType: userFields.bloodType?.stringValue,
-          age: userFields.age?.integerValue ? parseInt(userFields.age.integerValue) : undefined,
-          // Initialize empty arrays to avoid undefined errors
-          medicalConditions: [],
-          allergies: [],
-          medications: [],
-          notes: userFields.notes?.stringValue
-        };
-        
-        // Convert arrays safely
-        if (userFields.medicalConditions?.arrayValue?.values && convertedData.userInfo) {
-          convertedData.userInfo.medicalConditions = userFields.medicalConditions.arrayValue.values.map(
-            (v: any) => v.stringValue || ''
-          );
-        }
-        
-        if (userFields.allergies?.arrayValue?.values && convertedData.userInfo) {
-          convertedData.userInfo.allergies = userFields.allergies.arrayValue.values.map(
-            (v: any) => v.stringValue || ''
-          );
-        }
-        
-        if (userFields.medications?.arrayValue?.values && convertedData.userInfo) {
-          convertedData.userInfo.medications = userFields.medications.arrayValue.values.map(
-            (v: any) => v.stringValue || ''
-          );
-        }
-      }
-      
-      return convertedData;
-    } catch (error) {
-      console.error('[MapTracker] Error fetching session data via REST:', error);
+  const [session, setSession] = useState<SOSSession | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [statusMessage, setStatusMessage] = useState('Preparing live tracker...');
+  const [error, setError] = useState<string | null>(null);
+
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const loaderRef = useRef<Loader | null>(null);
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
+  const accuracyCircleRef = useRef<google.maps.Circle | null>(null);
+
+  const isDebugMode = import.meta.env.DEV;
+
+  const loader = useMemo(() => {
+    if (!GOOGLE_MAPS_API_KEY) {
       return null;
     }
-  }, [sessionId, searchParams]);
-  
+
+    if (!loaderRef.current) {
+      loaderRef.current = new Loader({
+        apiKey: GOOGLE_MAPS_API_KEY,
+        version: 'weekly',
+      });
+    }
+
+    return loaderRef.current;
+  }, []);
+
+  const updateMapMarker = useCallback((data: SOSSession) => {
+    if (!data.location || !mapRef.current) return;
+
+    const { latitude, longitude, accuracy } = data.location;
+    if (typeof latitude !== 'number' || typeof longitude !== 'number') return;
+
+    const position = { lat: latitude, lng: longitude };
+
+    mapRef.current.setCenter(position);
+
+    if (!markerRef.current) {
+      markerRef.current = new google.maps.Marker({
+        position,
+        map: mapRef.current,
+        title: data.userInfo?.name || 'Current SOS location',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 11,
+          fillColor: '#ef4444',
+          fillOpacity: 1,
+          strokeWeight: 3,
+          strokeColor: '#ffffff',
+        },
+        animation: google.maps.Animation.DROP,
+      });
+    } else {
+      markerRef.current.setPosition(position);
+    }
+
+    if (typeof accuracy === 'number' && accuracy > 0) {
+      if (!accuracyCircleRef.current) {
+        accuracyCircleRef.current = new google.maps.Circle({
+          map: mapRef.current,
+          fillColor: '#ef4444',
+          fillOpacity: 0.08,
+          strokeColor: '#ef4444',
+          strokeOpacity: 0.6,
+          strokeWeight: 1,
+        });
+      }
+
+      accuracyCircleRef.current.setCenter(position);
+      accuracyCircleRef.current.setRadius(Math.max(accuracy, 10));
+      accuracyCircleRef.current.setMap(mapRef.current);
+    } else if (accuracyCircleRef.current) {
+      accuracyCircleRef.current.setMap(null);
+    }
+  }, []);
+
+  const ensureMapReady = useCallback(async () => {
+    if (mapRef.current) {
+      return mapRef.current;
+    }
+
+    if (!loader) {
+      throw new Error('Google Maps API key is missing.');
+    }
+
+    await loader.load();
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (mapContainerRef.current) break;
+      // eslint-disable-next-line no-await-in-loop
+      await wait(75);
+    }
+
+    const container = mapContainerRef.current;
+
+    if (!container) {
+      throw new Error('Map container element not found.');
+    }
+
+    if (!container.style.height) {
+      container.style.height = '100%';
+    }
+
+    mapRef.current = new google.maps.Map(container, MAP_OPTIONS);
+    return mapRef.current;
+  }, [loader]);
+
+  const fetchSessionData = useCallback(
+    async (accessToken: string): Promise<SOSSession | null> => {
+      if (!sessionId) return null;
+
+      const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
+      const apiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+
+      if (!projectId || !apiKey) {
+        console.error('[MapTracker] Missing Firebase REST configuration');
+        return null;
+      }
+
+      try {
+        const { validateSosToken } = await import('../utils/TokenValidator');
+        const validation = await validateSosToken(sessionId, accessToken, projectId, apiKey);
+
+        if (!validation.isValid || !validation.sessionData) {
+          console.error('[MapTracker] Token validation failed:', validation.error);
+          return null;
+        }
+
+        const raw = validation.sessionData;
+        const fields = raw?.fields ?? {};
+
+        const converted: SOSSession = {
+          userId: fields.userId?.stringValue,
+          startTime: convertToTimestamp(fields.startTime?.timestampValue),
+          active: fields.active?.booleanValue ?? true,
+        };
+
+        const locationFields = fields.location?.mapValue?.fields;
+        if (locationFields) {
+          const latitude = readNumber(locationFields.latitude);
+          const longitude = readNumber(locationFields.longitude);
+
+          if (typeof latitude === 'number' && typeof longitude === 'number') {
+            converted.location = {
+              latitude,
+              longitude,
+              accuracy: readNumber(locationFields.accuracy),
+              timestamp: convertToTimestamp(locationFields.timestamp?.timestampValue),
+            };
+          }
+        }
+
+        const userFields = fields.userInfo?.mapValue?.fields;
+        if (userFields) {
+          const ageValue = readNumber(userFields.age);
+          converted.userInfo = {
+            name: userFields.name?.stringValue,
+            bloodType: userFields.bloodType?.stringValue,
+            age: typeof ageValue === 'number' && Number.isFinite(ageValue) ? Math.round(ageValue) : undefined,
+            medicalConditions: readStringArray(userFields.medicalConditions?.arrayValue?.values),
+            allergies: readStringArray(userFields.allergies?.arrayValue?.values),
+            medications: readStringArray(userFields.medications?.arrayValue?.values),
+            notes: userFields.notes?.stringValue,
+          };
+        }
+
+        return converted;
+      } catch (err) {
+        console.error('[MapTracker] Error fetching session data via REST API:', err);
+        return null;
+      }
+    },
+    [sessionId],
+  );
+
   useEffect(() => {
     if (!sessionId) {
-      setError("No session ID provided");
+      setError('No session ID provided.');
       setLoading(false);
-      return;
+      return undefined;
     }
-    
-    // Get the token from URL parameters first
-    const urlToken = searchParams.get('token');
-    
-    // Always update the token in localStorage from URL if available
-    if (urlToken) {
-      localStorage.setItem('sos_access_token', urlToken);
-      console.log('[MapTracker] Token from URL saved to localStorage:', urlToken.substring(0, 5) + '...');
-    } else {
-      // If no token in URL but we have one in localStorage, still use it
-      const storedToken = localStorage.getItem('sos_access_token');
-      if (storedToken) {
-        console.log('[MapTracker] Using token from localStorage:', storedToken.substring(0, 5) + '...');
-      } else {
-        console.error('[MapTracker] No access token available for this session');
-        setError('Missing access token. Please use the complete emergency link sent in the SOS message.');
-        setLoading(false);
-        return;
-      }
-    }
-    
-    // Record if this is an authenticated session or public emergency access
-    const accessMode = user ? 'authenticated' : 'emergency_access';
-    console.log(`[MapTracker] Accessing session in ${accessMode} mode with ${urlToken ? 'token from URL' : 'stored token'}`);
-    
-    // Load Google Maps
-    const loader = new Loader({
-      apiKey: GOOGLE_MAPS_API_KEY,
-      version: "weekly",
-    });
 
-    let unsubscribe: (() => void) | undefined;
-    let pollingInterval: number | undefined;
+    let isMounted = true;
+    let unsubscribe: (() => void) | null = null;
+    let pollingId: number | null = null;
 
-    // Initialize map and listen for session updates
-    const initializeMap = async () => {
+    const initialise = async () => {
       try {
-        await loader.load();
-        
-        // Wait for DOM to be fully loaded before initializing map
-        setTimeout(() => {
-          try {
-            // Ensure the map div exists
-            const mapElement = document.getElementById("map");
-            if (!mapElement) {
-              console.error('[MapTracker] Map element not found in DOM');
-              setError("Error initializing map: Map element not found");
-              setLoading(false);
-              return;
-            }
-            
-            // Make sure the map element is visible and has dimensions
-            mapElement.style.width = "100%";
-            mapElement.style.height = "calc(100% - 200px)";
-            
-            console.log('[MapTracker] Initializing map with element:', mapElement);
-            
-            // Create the map instance
-            mapRef.current = new google.maps.Map(mapElement, {
-              center: { lat: 0, lng: 0 },
-              zoom: 15,
-              mapTypeControl: true,
-              fullscreenControl: true,
-              streetViewControl: false,
-              mapTypeId: google.maps.MapTypeId.ROADMAP,
-            });
-            
-            console.log('[MapTracker] Map initialized successfully');
-          } catch (error) {
-            console.error('[MapTracker] Error during map initialization:', error);
-            setError(`Error initializing map: ${error instanceof Error ? error.message : String(error)}`);
-            setLoading(false);
-          }
-        }, 1000); // Give more time for the DOM to render completely
+        setStatusMessage('Validating access...');
 
-        // Use different approaches for authenticated vs public access
+        const urlToken = searchParams.get('token');
+        if (urlToken) {
+          localStorage.setItem('sos_access_token', urlToken);
+        }
+
+        const accessToken = urlToken || localStorage.getItem('sos_access_token');
+
+        if (!accessToken) {
+          throw new Error('Missing access token. Please use the complete emergency link.');
+        }
+
+        setStatusMessage('Loading map...');
+        await ensureMapReady();
+
+        if (!isMounted) return;
+
+        setStatusMessage('Connecting to live updates...');
+
+        const handleIncomingSession = (data: SOSSession | null) => {
+          if (!isMounted || !data) return;
+
+          setSession(data);
+          updateMapMarker(data);
+          setLoading(false);
+          setStatusMessage('');
+          setError(null);
+        };
+
         if (user) {
-          console.log('[MapTracker] Using Firebase SDK with authentication');
-          // For authenticated users, use the Firebase SDK with onSnapshot
-          const sessionRef = doc(db, "sos_sessions", sessionId);
-          
+          const sessionRef = doc(db, 'sos_sessions', sessionId);
           unsubscribe = onSnapshot(
             sessionRef,
             { includeMetadataChanges: true },
-            (docSnapshot) => {
-              if (docSnapshot.exists()) {
-                const data = docSnapshot.data() as SOSSession;
-                setSession(data);
-                updateMapMarker(data);
+            (snapshot) => {
+              if (!snapshot.exists()) {
+                setError('SOS session not found or has expired.');
                 setLoading(false);
-              } else {
-                setError("SOS session not found or has expired");
-                setLoading(false);
+                return;
               }
+
+              const data = snapshot.data() as SOSSession;
+              handleIncomingSession(data);
             },
-            (error) => {
-              console.error("[MapTracker] Error loading session data via SDK:", error);
-              setError("Error loading SOS session data");
+            (err) => {
+              console.error('[MapTracker] Error with Firestore listener:', err);
+              setError('Error loading SOS session data.');
               setLoading(false);
-            }
+            },
           );
         } else {
-          console.log('[MapTracker] Using REST API polling for public access');
-          // For public access, use REST API polling
-          const pollData = async () => {
-            const data = await fetchSessionData();
+          const poll = async () => {
+            const data = await fetchSessionData(accessToken);
+            if (!isMounted) return;
+
             if (data) {
-              setSession(data);
-              updateMapMarker(data);
-              setLoading(false);
-            } else if (loading) {
-              // Only show error if we're still loading (avoid overwriting previous data)
-              setError("Could not load SOS session data. Please try refreshing.");
-              setLoading(false);
+              handleIncomingSession(data);
+            } else {
+              setError('Unable to load SOS session data.');
             }
           };
-          
-          // Initial fetch
-          await pollData();
-          
-          // Set up polling - using 3 seconds as a balance between responsiveness and resource usage
-          pollingInterval = window.setInterval(pollData, 3000);
+
+          await poll();
+          pollingId = window.setInterval(poll, 5000);
         }
       } catch (err) {
-        console.error("[MapTracker] Error initializing map:", err);
-        setError("Error initializing map");
+        console.error('[MapTracker] Initialisation failure:', err);
+        if (!isMounted) return;
+
+        const message =
+          err instanceof Error ? err.message : 'An unexpected error occurred while initialising the tracker.';
+        setError(message);
         setLoading(false);
+        setStatusMessage('');
       }
     };
 
-    initializeMap();
+    initialise();
 
-    // Cleanup function
     return () => {
+      isMounted = false;
       if (unsubscribe) {
         unsubscribe();
       }
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
+      if (pollingId) {
+        clearInterval(pollingId);
       }
     };
-  }, [sessionId]);
+  }, [ensureMapReady, fetchSessionData, searchParams, sessionId, updateMapMarker, user]);
 
-  // Format timestamp to readable date/time
-  const formatTimestamp = (timestamp: Timestamp | undefined) => {
-    if (!timestamp) return "N/A";
+  const formatTimestamp = (timestamp?: Timestamp) => {
+    if (!timestamp) return 'Unknown';
     return new Date(timestamp.toMillis()).toLocaleString();
   };
 
-  if (loading) {
-    return (
-      <div className="loading">
-        <h2>Loading emergency location...</h2>
-        <p>Please wait while we fetch the latest location data.</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="error-container">
-        <div className="error-message">
-          <h2>Error Loading Emergency Location</h2>
-          <p>{error}</p>
-          <p>This may be due to:</p>
-          <ul>
-            <li>Invalid or expired emergency link</li>
-            <li>The emergency has been resolved</li>
-            <li>Network connection issues</li>
-          </ul>
-          <button 
-            onClick={() => window.location.reload()}
-            style={{
-              padding: '10px 15px',
-              background: '#0284c7',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              marginTop: '15px'
-            }}
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="map-container">
-      <div className="header">
-        <h1>ClimateReady SOS Emergency</h1>
-        {session?.active === false && (
-          <div style={{ color: '#9c9c9c', fontSize: '0.9rem' }}>
-            This emergency has been marked as resolved
+    <div className="map-tracker-wrapper">
+      <header className="map-tracker-header">
+        <div>
+          <h1>ClimateReady SOS Emergency</h1>
+          <p className="map-tracker-subtitle">Live status shared with your trusted responders.</p>
+        </div>
+        {session?.active === false && <span className="map-tracker-badge">Resolved</span>}
+      </header>
+
+      <section className="map-tracker-body">
+        <div ref={mapContainerRef} className="map-tracker-map" />
+
+        {(loading || statusMessage) && !error && (
+          <div className="map-tracker-overlay" aria-live="polite">
+            <div className="map-tracker-overlay-card">
+              <div className="spinner" />
+              <h2>Preparing map</h2>
+              <p>{statusMessage || 'Fetching the latest emergency location...'}</p>
+            </div>
           </div>
         )}
-      </div>
-      
-      {/* Ensure map div has explicit height and is positioned correctly */}
-      <div id="map" style={{ 
-        width: "100%", 
-        height: "calc(100% - 200px)", 
-        position: "absolute",
-        top: "60px", 
-        left: 0, 
-        right: 0,
-        zIndex: 1
-      }}></div>
-      
-      {/* Show token debug helper to troubleshoot token issues */}
-      
-      {session && (
-        <div className="emergency-info">
-          <h2>Emergency Information</h2>
-          <ul className="info-list">
-            {session.userInfo?.name && (
-              <li className="info-item">
-                <span className="info-label">Name:</span>
-                <span className="info-value">{session.userInfo.name}</span>
-              </li>
-            )}
-            
-            {session.userInfo?.bloodType && (
-              <li className="info-item">
-                <span className="info-label">Blood Type:</span>
-                <span className="info-value">{session.userInfo.bloodType}</span>
-              </li>
-            )}
-            
-            {session.userInfo?.age && (
-              <li className="info-item">
-                <span className="info-label">Age:</span>
-                <span className="info-value">{session.userInfo.age}</span>
-              </li>
-            )}
-            
-            {session.userInfo?.medicalConditions && session.userInfo.medicalConditions.length > 0 && (
-              <li className="info-item">
-                <span className="info-label">Medical Conditions:</span>
-                <span className="info-value">{session.userInfo.medicalConditions.join(", ")}</span>
-              </li>
-            )}
-            
-            {session.userInfo?.allergies && session.userInfo.allergies.length > 0 && (
-              <li className="info-item">
-                <span className="info-label">Allergies:</span>
-                <span className="info-value">{session.userInfo.allergies.join(", ")}</span>
-              </li>
-            )}
-            
-            {session.userInfo?.medications && session.userInfo.medications.length > 0 && (
-              <li className="info-item">
-                <span className="info-label">Medications:</span>
-                <span className="info-value">{session.userInfo.medications.join(", ")}</span>
-              </li>
-            )}
-            
-            {session.userInfo?.notes && (
-              <li className="info-item">
-                <span className="info-label">Additional Notes:</span>
-                <span className="info-value">{session.userInfo.notes}</span>
-              </li>
-            )}
-          </ul>
-          
-          {session.location && (
-            <div className="last-updated">
-              Last updated: {formatTimestamp(session.location.timestamp)}
+
+        {error && (
+          <div className="map-tracker-overlay error" role="alert">
+            <div className="map-tracker-overlay-card">
+              <h2>We ran into a problem</h2>
+              <p>{error}</p>
+              <ul>
+                <li>Double-check that you opened the full emergency link</li>
+                <li>The SOS session may have expired or been closed</li>
+                <li>Your internet connection might be unstable</li>
+              </ul>
+              <button type="button" onClick={() => window.location.reload()} className="map-tracker-retry">
+                Try again
+              </button>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </section>
+
+      <aside className="map-tracker-info">
+        <h2>Emergency details</h2>
+        {session ? (
+          <>
+            <dl>
+              {session.userInfo?.name && (
+                <div>
+                  <dt>Name</dt>
+                  <dd>{session.userInfo.name}</dd>
+                </div>
+              )}
+              {typeof session.userInfo?.age === 'number' && (
+                <div>
+                  <dt>Age</dt>
+                  <dd>{session.userInfo.age}</dd>
+                </div>
+              )}
+              {session.userInfo?.bloodType && (
+                <div>
+                  <dt>Blood type</dt>
+                  <dd>{session.userInfo.bloodType}</dd>
+                </div>
+              )}
+              {session.userInfo?.medicalConditions?.length ? (
+                <div>
+                  <dt>Medical conditions</dt>
+                  <dd>{session.userInfo.medicalConditions.join(', ')}</dd>
+                </div>
+              ) : null}
+              {session.userInfo?.allergies?.length ? (
+                <div>
+                  <dt>Allergies</dt>
+                  <dd>{session.userInfo.allergies.join(', ')}</dd>
+                </div>
+              ) : null}
+              {session.userInfo?.medications?.length ? (
+                <div>
+                  <dt>Medications</dt>
+                  <dd>{session.userInfo.medications.join(', ')}</dd>
+                </div>
+              ) : null}
+              {session.userInfo?.notes && (
+                <div>
+                  <dt>Notes for responders</dt>
+                  <dd>{session.userInfo.notes}</dd>
+                </div>
+              )}
+            </dl>
+
+            {session.location && (
+              <p className="map-tracker-updated">Last updated: {formatTimestamp(session.location.timestamp)}</p>
+            )}
+          </>
+        ) : (
+          <p className="map-tracker-placeholder">We&apos;ll populate emergency details once the session loads.</p>
+        )}
+      </aside>
+
+      {isDebugMode && <TokenDebugHelper />}
     </div>
   );
 };
