@@ -53,90 +53,131 @@ const Login: React.FC = () => {
   };
   
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-header">
-          <img 
-            src={logoImg} 
-            alt="ClimateReady Logo" 
-            className="login-logo" 
+    <div className="login-page">
+      <section className="login-hero" aria-hidden="true">
+        <div className="hero-overlay">
+          <img
+            src={logoImg}
+            alt=""
+            className="hero-logo"
           />
-          <h2>SOS Tracker Login</h2>
-          <p>Sign in to view and track emergency SOS locations</p>
-          <div className="emergency-access-notice">
-            <p><strong>Emergency Contact?</strong> If you received a link via SMS or email, click it directly to view the emergency location without logging in.</p>
-          </div>
+          <p className="hero-badge">ClimateReady Command</p>
+          <h1>Coordinate emergency response with confidence.</h1>
+          <p className="hero-subtitle">
+            Monitor SOS activations, confirm responder presence, and share critical context with your team in real time.
+          </p>
+          <ul className="hero-highlights">
+            <li>
+              <span>Live telemetry</span>
+              <p>Map updates every few seconds with accuracy rings and responder notes.</p>
+            </li>
+            <li>
+              <span>Responder ready</span>
+              <p>Designed for incident command centers and verified emergency partners.</p>
+            </li>
+            <li>
+              <span>Secure by default</span>
+              <p>Only trusted operators with credentials can access this dashboard.</p>
+            </li>
+          </ul>
         </div>
-        
-        {loginError && (
-          <div className="login-error">
-            {loginError}
-          </div>
-        )}
-        
-        <form onSubmit={handleSubmit} className="login-form">
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              required
+      </section>
+
+      <section className="login-panel" aria-label="Login form">
+        <div className="panel-content">
+          <header className="panel-header">
+            <img
+              src={logoImg}
+              alt="ClimateReady logo"
+              className="panel-logo"
             />
-          </div>
-          
-          <div className="form-group">
-            <label htmlFor="password">Password</label>
-            <div className="password-input-container">
+            <h2>Emergency Operations Login</h2>
+            <p>Sign in with your responder credentials to open the command dashboard.</p>
+          </header>
+
+          <aside className="panel-notice" role="note">
+            <strong>Emergency contact?</strong>
+            <p>If you received an SOS link, tap it directly to view the live tracker — no login required.</p>
+          </aside>
+
+          {loginError && (
+            <div className="login-alert" role="alert">
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="login-form" noValidate>
+            <div className="form-field">
+              <label htmlFor="email">Email</label>
               <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
+                id="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="commander@agency.gov"
                 required
               />
-              <button 
-                type="button" 
-                className="toggle-password"
-                onClick={() => setShowPassword(!showPassword)}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
             </div>
-          </div>
-          
-          <button 
-            type="submit" 
-            className="login-button" 
-            disabled={isLoading}
-          >
-            {isLoading ? 'Signing in...' : 'Sign In'}
-          </button>
-          <div className="login-status-message">
-            {isLoading && <p>Authenticating your credentials...</p>}
-          </div>
-        </form>
-        
-        <div className="login-footer">
-          <button 
-            type="button"
-            className="forgot-password-link"
-            onClick={handleResetPassword}
-            disabled={isLoading}
-          >
-            Forgot your password?
-          </button>
-          
-          <p className="info-text">
-            This login is for emergency responders only. If you received an SOS link, use the direct access code provided.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-};
 
-export default Login;
+            <div className="form-field">
+              <label htmlFor="password">Password</label>
+              <div className="password-field">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="submit-button"
+              disabled={isLoading}
+            >
+              {isLoading ? 'Signing in…' : 'Sign in'}
+            </button>
+
+            <p className="loading-hint" aria-live="polite">
+              {isLoading ? 'Authenticating your credentials…' : '\u00A0'}
+            </p>
+          </form>
+
+          <footer className="panel-footer">
+            <button
+              type="button"
+              className="reset-link"
+              onClick={handleResetPassword}
+              disabled={isLoading}
+            >
+              Forgot your password?
+            </button>
+
+            <div className="support-callout">
+              <h3>Need access?</h3>
+              <p>
+                Only vetted responders and ClimateReady partners receive credentials. Contact the regional coordinator
+                if you need to onboard a new operator.
+              </p>
+            </div>
+          </footer>
+        </div>
+      </section>
+    </div>
+   );
+ };
+ 
+ export default Login;
