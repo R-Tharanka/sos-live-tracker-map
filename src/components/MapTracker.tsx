@@ -379,7 +379,8 @@ const MapTracker: React.FC = () => {
   };
 
   return (
-    <div className="map-tracker-wrapper">
+
+    <div>
       <header className="map-tracker-header">
         <div>
           <h1>ClimateReady SOS Emergency</h1>
@@ -388,96 +389,99 @@ const MapTracker: React.FC = () => {
         {session?.active === false && <span className="map-tracker-badge">Resolved</span>}
       </header>
 
-      <section className="map-tracker-body">
-        <div ref={mapContainerRef} className="map-tracker-map" />
+      <div className="map-tracker-wrapper">
 
-        {(loading || statusMessage) && !error && (
-          <div className="map-tracker-overlay" aria-live="polite">
-            <div className="map-tracker-overlay-card">
-              <div className="spinner" />
-              <h2>Preparing map</h2>
-              <p>{statusMessage || 'Fetching the latest emergency location...'}</p>
+        <section className="map-tracker-body">
+          <div ref={mapContainerRef} className="map-tracker-map" />
+
+          {(loading || statusMessage) && !error && (
+            <div className="map-tracker-overlay" aria-live="polite">
+              <div className="map-tracker-overlay-card">
+                <div className="spinner" />
+                <h2>Preparing map</h2>
+                <p>{statusMessage || 'Fetching the latest emergency location...'}</p>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {error && (
-          <div className="map-tracker-overlay error" role="alert">
-            <div className="map-tracker-overlay-card">
-              <h2>We ran into a problem</h2>
-              <p>{error}</p>
-              <ul>
-                <li>Double-check that you opened the full emergency link</li>
-                <li>The SOS session may have expired or been closed</li>
-                <li>Your internet connection might be unstable</li>
-              </ul>
-              <button type="button" onClick={() => window.location.reload()} className="map-tracker-retry">
-                Try again
-              </button>
+          {error && (
+            <div className="map-tracker-overlay error" role="alert">
+              <div className="map-tracker-overlay-card">
+                <h2>We ran into a problem</h2>
+                <p>{error}</p>
+                <ul>
+                  <li>Double-check that you opened the full emergency link</li>
+                  <li>The SOS session may have expired or been closed</li>
+                  <li>Your internet connection might be unstable</li>
+                </ul>
+                <button type="button" onClick={() => window.location.reload()} className="map-tracker-retry">
+                  Try again
+                </button>
+              </div>
             </div>
-          </div>
-        )}
-      </section>
+          )}
+        </section>
 
-      <aside className="map-tracker-info">
-        <h2>Emergency details</h2>
-        {session ? (
-          <>
-            <dl>
-              {session.userInfo?.name && (
-                <div>
-                  <dt>Name</dt>
-                  <dd>{session.userInfo.name}</dd>
-                </div>
-              )}
-              {typeof session.userInfo?.age === 'number' && (
-                <div>
-                  <dt>Age</dt>
-                  <dd>{session.userInfo.age}</dd>
-                </div>
-              )}
-              {session.userInfo?.bloodType && (
-                <div>
-                  <dt>Blood type</dt>
-                  <dd>{session.userInfo.bloodType}</dd>
-                </div>
-              )}
-              {session.userInfo?.medicalConditions?.length ? (
-                <div>
-                  <dt>Medical conditions</dt>
-                  <dd>{session.userInfo.medicalConditions.join(', ')}</dd>
-                </div>
-              ) : null}
-              {session.userInfo?.allergies?.length ? (
-                <div>
-                  <dt>Allergies</dt>
-                  <dd>{session.userInfo.allergies.join(', ')}</dd>
-                </div>
-              ) : null}
-              {session.userInfo?.medications?.length ? (
-                <div>
-                  <dt>Medications</dt>
-                  <dd>{session.userInfo.medications.join(', ')}</dd>
-                </div>
-              ) : null}
-              {session.userInfo?.notes && (
-                <div>
-                  <dt>Notes for responders</dt>
-                  <dd>{session.userInfo.notes}</dd>
-                </div>
-              )}
-            </dl>
+        <aside className="map-tracker-info">
+          <h2>Emergency details</h2>
+          {session ? (
+            <>
+              <dl>
+                {session.userInfo?.name && (
+                  <div>
+                    <dt>Name</dt>
+                    <dd>{session.userInfo.name}</dd>
+                  </div>
+                )}
+                {typeof session.userInfo?.age === 'number' && (
+                  <div>
+                    <dt>Age</dt>
+                    <dd>{session.userInfo.age}</dd>
+                  </div>
+                )}
+                {session.userInfo?.bloodType && (
+                  <div>
+                    <dt>Blood type</dt>
+                    <dd>{session.userInfo.bloodType}</dd>
+                  </div>
+                )}
+                {session.userInfo?.medicalConditions?.length ? (
+                  <div>
+                    <dt>Medical conditions</dt>
+                    <dd>{session.userInfo.medicalConditions.join(', ')}</dd>
+                  </div>
+                ) : null}
+                {session.userInfo?.allergies?.length ? (
+                  <div>
+                    <dt>Allergies</dt>
+                    <dd>{session.userInfo.allergies.join(', ')}</dd>
+                  </div>
+                ) : null}
+                {session.userInfo?.medications?.length ? (
+                  <div>
+                    <dt>Medications</dt>
+                    <dd>{session.userInfo.medications.join(', ')}</dd>
+                  </div>
+                ) : null}
+                {session.userInfo?.notes && (
+                  <div>
+                    <dt>Notes for responders</dt>
+                    <dd>{session.userInfo.notes}</dd>
+                  </div>
+                )}
+              </dl>
 
-            {session.location && (
-              <p className="map-tracker-updated">Last updated: {formatTimestamp(session.location.timestamp)}</p>
-            )}
-          </>
-        ) : (
-          <p className="map-tracker-placeholder">We&apos;ll populate emergency details once the session loads.</p>
-        )}
-      </aside>
+              {session.location && (
+                <p className="map-tracker-updated">Last updated: {formatTimestamp(session.location.timestamp)}</p>
+              )}
+            </>
+          ) : (
+            <p className="map-tracker-placeholder">We&apos;ll populate emergency details once the session loads.</p>
+          )}
+        </aside>
 
-      {isDebugMode && <TokenDebugHelper />}
+        {isDebugMode && <TokenDebugHelper />}
+      </div>
     </div>
   );
 };
